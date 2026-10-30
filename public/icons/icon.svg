@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#08080A"/>
+  <rect x="2" y="2" width="508" height="508" rx="110" fill="none" stroke="#232630" stroke-width="4"/>
+  <g transform="translate(90, 110) skewX(-24)">
+    <!-- Light Blue Stripe -->
+    <rect x="30" y="40" width="70" height="220" rx="8" fill="#4FA3FF" />
+    <!-- Dark Blue Stripe -->
+    <rect x="120" y="40" width="70" height="220" rx="8" fill="#0B3A82" />
+    <!-- M Red Stripe -->
+    <rect x="210" y="40" width="70" height="220" rx="8" fill="#E4101E" />
+  </g>
+</svg>
+

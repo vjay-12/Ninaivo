@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #08080a;
+  --surface: #111216;
+  --surface-2: #1a1c22;
+  --surface-3: #232630;
+  --m-light: #4fa3ff;
+  --m-dark: #0b3a82;
+  --m-red: #e4101e;
+  --text: #f3f5f8;
+  --muted: #8a92a3;
+}
+
+body {
+  color: var(--text);
+  background-color: var(--bg);
+  min-height: 100vh;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Subtle carbon fibre texture */
+.carbon-pattern {
+  background-color: #08080a;
+  background-image: 
+    linear-gradient(27deg, #0e0f13 5px, transparent 5px),
+    linear-gradient(207deg, #0e0f13 5px, transparent 5px),
+    linear-gradient(117deg, #0e0f13 5px, transparent 5px),
+    linear-gradient(297deg, #0e0f13 5px, transparent 5px);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 0, 8px -8px, 0px 8px;
+}
+
+/* BMW M Tri-color Stripe Utilities */
+.m-stripe-diagonal {
+  background: linear-gradient(115deg, #4fa3ff 0%, #4fa3ff 33.33%, #0b3a82 33.33%, #0b3a82 66.66%, #e4101e 66.66%, #e4101e 100%);
+}
+
+.m-stripe-horizontal {
+  background: linear-gradient(90deg, #4fa3ff 0%, #4fa3ff 33.33%, #0b3a82 33.33%, #0b3a82 66.66%, #e4101e 66.66%, #e4101e 100%);
+}
+
+.m-stripe-vertical {
+  background: linear-gradient(180deg, #4fa3ff 0%, #4fa3ff 33.33%, #0b3a82 33.33%, #0b3a82 66.66%, #e4101e 66.66%, #e4101e 100%);
+}
+
+/* Card styling with subtle glow */
+.m-card {
+  background-color: #111216;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.m-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.m-card-light {
+  border-left: 3px solid #4fa3ff;
+}
+
+.m-card-diet {
+  border-left: 3px solid #e4101e;
+}
+
+.m-card-weekly {
+  border-left: 3px solid #3d7eff;
+}
+
+.m-card-future {
+  border-left: 3px solid #8e44ad;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Safe area padding for mobile home bar */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+
