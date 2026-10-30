@@ -99,7 +99,7 @@ npm run db:seed
 ```bash
 npm run dev
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser:
+Open **[http://localhost:3008](http://localhost:3008)** in your browser:
 1. Enter PIN: `1234`
 2. Tap **Unlock Tracker** to open the dashboard.
 
@@ -157,3 +157,4 @@ npm start
 As specified in PLAN.md:
 - **Phase 1 In-App Reminders Only**: Reminders currently notify via the in-app banner while the app is open. Web Push / background notifications require an external scheduled trigger (due to Vercel Hobby free tier running crons at most once per day).
 - **Single-User Architecture**: Purpose-built for single-user security via master PIN. Multi-user OAuth accounts (Clerk / Auth.js) were deferred to a future milestone.
+
