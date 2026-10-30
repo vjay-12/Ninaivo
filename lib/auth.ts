@@ -1,6 +1,9 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
+import { db } from "@/db";
+import { settings } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const COOKIE_NAME = "m_routine_session";
 const SESSION_EXPIRY = "30d";
@@ -36,81 +39,127 @@ export async function isUserAuthenticated(): Promise<boolean> {
   return await verifySessionToken(token);
 }
 
-export async function verifyPinAndCreateSession(pin: string): Promise<{ success: boolean; error?: string }> {
-  // 1. Direct plain PIN support (e.g. APP_PIN=1234)
-  if (process.env.APP_PIN && process.env.APP_PIN === pin) {
-    const token = await createSessionToken();
-    const cookieStore = cookies();
-    cookieStore.set(COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    });
-    return { success: true };
+/**
+ * Retrieves the custom PIN hash from the database settings table if set,
+ * or returns null if relying on environment variables.
+ */
+export async function getCustomPinHashFromDb(): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "app_pin_hash"))
+      .limit(1);
+
+    if (row?.value && typeof row.value === "object" && "hash" in (row.value as any)) {
+      return (row.value as any).hash;
+    }
+  } catch (err) {
+    console.error("Error checking custom PIN hash in DB:", err);
+  }
+  return null;
+}
+
+/**
+ * Verifies if the provided PIN is valid against the DB hash or ENV hash/PIN
+ */
+export async function verifyPin(pin: string): Promise<boolean> {
+  // 1. Check if database has a custom changed PIN
+  const dbHash = await getCustomPinHashFromDb();
+  if (dbHash) {
+    try {
+      const match = await bcrypt.compare(pin, dbHash);
+      if (match) return true;
+    } catch {
+      if (pin === dbHash) return true;
+    }
   }
 
-  let hash = process.env.APP_PIN_HASH;
+  // 2. Direct plain PIN in ENV (e.g. APP_PIN=1234)
+  if (process.env.APP_PIN && process.env.APP_PIN === pin) {
+    return true;
+  }
 
-  // 2. If hash is set
+  // 3. Bcrypt hash in ENV
+  let hash = process.env.APP_PIN_HASH;
   if (hash) {
-    // If hash has escaped backslashes from .env like \$2a\$10...
     if (hash.startsWith("\\$")) {
       hash = hash.replace(/\\\$/g, "$");
     }
-
-    // If Next.js dotenv-expand truncated $2a$10$ from default seed hash
     if (!hash.startsWith("$2") && hash.includes("MoYL95NaFChTVGu")) {
       hash = "$2a$10$Y1AJAX3I13yIYEYBJDY7IOrE42d5mqg6buXuw/MoYL95NaFChTVGu";
     }
 
     try {
       const isValid = await bcrypt.compare(pin, hash);
-      if (isValid) {
-        const token = await createSessionToken();
-        const cookieStore = cookies();
-        cookieStore.set(COOKIE_NAME, token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 30 * 24 * 60 * 60,
-        });
-        return { success: true };
-      }
+      if (isValid) return true;
     } catch {
-      // Direct comparison fallback
-      if (pin === hash) {
-        const token = await createSessionToken();
-        const cookieStore = cookies();
-        cookieStore.set(COOKIE_NAME, token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 30 * 24 * 60 * 60,
-        });
-        return { success: true };
-      }
+      if (pin === hash) return true;
     }
   }
 
-  // 3. Fallback for default PIN 1234 if unconfigured
-  if (!hash && !process.env.APP_PIN && pin === "1234") {
-    const token = await createSessionToken();
-    const cookieStore = cookies();
-    cookieStore.set(COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    });
-    return { success: true };
+  // 4. Fallback for default PIN 1234 if no custom hash exists in DB or ENV
+  if (!dbHash && !hash && !process.env.APP_PIN && pin === "1234") {
+    return true;
   }
 
-  return { success: false, error: "Invalid PIN. Try again." };
+  return false;
+}
+
+export async function verifyPinAndCreateSession(pin: string): Promise<{ success: boolean; error?: string }> {
+  const isValid = await verifyPin(pin);
+  if (!isValid) {
+    return { success: false, error: "Invalid PIN. Try again." };
+  }
+
+  const token = await createSessionToken();
+  const cookieStore = cookies();
+
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  });
+
+  return { success: true };
+}
+
+/**
+ * Saves a new PIN hash to the database settings table.
+ */
+export async function saveNewPinHashToDb(newPin: string): Promise<void> {
+  const newHash = await bcrypt.hash(newPin, 10);
+  await db
+    .insert(settings)
+    .values({
+      key: "app_pin_hash",
+      value: {
+        hash: newHash,
+        updatedAt: new Date().toISOString(),
+      },
+    })
+    .onConflictDoUpdate({
+      target: settings.key,
+      set: {
+        value: {
+          hash: newHash,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+  // Re-sign session cookie to ensure continued valid access
+  const token = await createSessionToken();
+  const cookieStore = cookies();
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60,
+  });
 }
 
 export async function clearSession(): Promise<void> {

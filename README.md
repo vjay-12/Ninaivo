@@ -37,11 +37,15 @@ Built with **Next.js (App Router) + TypeScript + Tailwind CSS**, backed by **Neo
   - Automated rule-based insights.
   - **Export CSV logs** and **Download JSON database backup**.
 - **Settings**:
+  - **Change Security PIN**: Update your master login PIN directly inside the app by entering your current PIN. It is automatically hashed with bcrypt and persisted to the Neon database.
   - Timezone selector (defaults to `Asia/Kolkata`).
   - BMW M theme palette specs.
-  - Security instructions for updating the master PIN.
   - **Restore JSON backup** directly into Neon database.
-- **PWA**: Installable on mobile devices with `manifest.webmanifest` and dark theme.
+- **PWA (Mobile Web App Ready)**:
+  - Full PWA manifest (`manifest.webmanifest`) with standard and maskable icons.
+  - Service worker (`sw.js`) with offline caching strategy and install prompt handler (`PwaRegister`).
+  - Native standalone display mode without browser address bar.
+  - Full-screen iOS Safari support (`apple-mobile-web-app-capable`, `apple-touch-icon`).
 
 ---
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
+import PwaRegister from "@/components/PwaRegister";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,6 +25,10 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "M Routine",
   },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -32,6 +37,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -42,9 +48,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} ${barlow.variable} font-sans carbon-pattern text-[#F3F5F8] min-h-screen selection:bg-[#4FA3FF]/30 selection:text-white`}>
+        <PwaRegister />
         {children}
       </body>
     </html>
   );
 }
-

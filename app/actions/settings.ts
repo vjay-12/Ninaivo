@@ -2,8 +2,7 @@
 
 import { db } from "@/db";
 import { settings, items, dailyLogs, weeklyTasks, weeklyLogs, futureReminders } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { isUserAuthenticated } from "@/lib/auth";
+import { isUserAuthenticated, verifyPin, saveNewPinHashToDb } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getSettingsData() {
@@ -33,6 +32,39 @@ export async function updateTimezoneSetting(tz: string) {
   revalidatePath("/settings");
   revalidatePath("/today");
   return { success: true };
+}
+
+export async function changePinAction(currentPin: string, newPin: string) {
+  const auth = await isUserAuthenticated();
+  if (!auth) throw new Error("Unauthorized");
+
+  if (!currentPin) {
+    return { success: false, error: "Please enter your current PIN" };
+  }
+
+  // 1. Verify current PIN
+  const isCurrentValid = await verifyPin(currentPin);
+  if (!isCurrentValid) {
+    return { success: false, error: "Current PIN is incorrect" };
+  }
+
+  // 2. Validate new PIN
+  if (!newPin || newPin.length < 4) {
+    return { success: false, error: "New PIN must be at least 4 digits" };
+  }
+
+  if (newPin === currentPin) {
+    return { success: false, error: "New PIN must be different from current PIN" };
+  }
+
+  // 3. Save new PIN hash to DB and update session
+  await saveNewPinHashToDb(newPin);
+
+  revalidatePath("/settings");
+  return {
+    success: true,
+    message: "PIN changed successfully! Use your new PIN for future logins.",
+  };
 }
 
 export async function importDatabaseBackup(data: any) {
@@ -129,4 +161,3 @@ export async function importDatabaseBackup(data: any) {
   revalidatePath("/report");
   return { success: true };
 }
-
