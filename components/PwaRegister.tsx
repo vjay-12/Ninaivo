@@ -14,7 +14,7 @@ export default function PwaRegister() {
         navigator.serviceWorker
           .register("/sw.js")
           .then((reg) => {
-            console.log("M Routine ServiceWorker registered:", reg.scope);
+            console.log("Ninaivo ServiceWorker registered:", reg.scope);
           })
           .catch((err) => {
             console.warn("ServiceWorker registration failed:", err);

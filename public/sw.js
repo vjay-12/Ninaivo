@@ -1,4 +1,4 @@
-const CACHE_NAME = "m-routine-v1";
+const CACHE_NAME = "ninaivo-v1";
 const ASSETS_TO_CACHE = [
   "/",
   "/login",

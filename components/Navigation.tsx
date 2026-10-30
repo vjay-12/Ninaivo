@@ -76,7 +76,7 @@ export function DesktopSidebar() {
         </div>
         <div>
           <span className="font-heading font-bold text-xl tracking-wider text-white block">
-            M ROUTINE
+            NINAIVO
           </span>
           <span className="text-[10px] text-[#8A92A3] uppercase tracking-widest block -mt-1 font-semibold">
             Daily Tracker
@@ -149,7 +149,7 @@ export function MobileTopHeader() {
           <div className="w-full h-full m-stripe-diagonal -skew-x-12" />
         </div>
         <span className="font-heading font-bold text-lg tracking-wider text-white">
-          M ROUTINE
+          NINAIVO
         </span>
       </div>
 

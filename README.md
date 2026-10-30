@@ -1,4 +1,4 @@
-# M Routine: Daily Tracker (BMW M Theme)
+# Ninaivo: Daily Tracker (BMW M Theme)
 
 A high-performance personal web app for daily habit checklist, diet tracking, weekly recurring tasks, future one-off reminders, and a comprehensive SQL-driven performance report.
 

@@ -3,8 +3,8 @@ import { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "M Routine - Daily Performance Tracker",
-    short_name: "M Routine",
+    name: "Ninaivo - Daily Performance Tracker",
+    short_name: "Ninaivo",
     description: "High performance daily checklist, diet, weekly and future reminders",
     start_url: "/today",
     scope: "/",

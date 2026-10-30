@@ -35,7 +35,7 @@ export default function ReportView({ initialData }: { initialData: ReportData })
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `m-routine-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `ninaivo-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -51,7 +51,7 @@ export default function ReportView({ initialData }: { initialData: ReportData })
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `m-routine-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `ninaivo-logs-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {

@@ -58,7 +58,7 @@ export default function LoginPage() {
               <ShieldCheck className="w-6 h-6 text-[#4FA3FF]" />
             </div>
             <h1 className="font-heading text-3xl font-bold tracking-wider uppercase text-white">
-              M ROUTINE
+              NINAIVO
             </h1>
             <p className="text-xs text-[#8A92A3] mt-1 tracking-wide">
               DAILY PERFORMANCE &amp; DISCIPLINE TRACKER

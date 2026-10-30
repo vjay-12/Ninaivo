@@ -17,13 +17,13 @@ const barlow = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "M Routine | Daily Performance Tracker",
+  title: "Ninaivo | Daily Performance Tracker",
   description: "Daily checklist, diet, weekly & future reminders powered by BMW M spirit.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "M Routine",
+    title: "Ninaivo",
   },
   icons: {
     icon: "/icons/icon-192.png",
