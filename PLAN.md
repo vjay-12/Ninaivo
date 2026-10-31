@@ -42,14 +42,15 @@ A personal web app for daily checklist, diet tracking, weekly reminders, future 
 - Fields: name, type (checklist or diet), target count (1 = simple tick, 3 = fruits), reminder time, active toggle.
 - Starter items: *Brush at night*, *Eggs*, *Fruits (3)*.
 
-### Weekly
-- Week strip Mon to Sun, with a dot on days that have tasks.
-- Tasks repeat on chosen weekdays, with an optional time.
-- Tick per occurrence, so history is kept.
-
-### Future
-- One-off reminders with title, date, time and notes.
-- Groups: **Overdue**, **Today**, **Upcoming**, **Done**.
+### Upcoming (Merged Weekly + Future)
+- List of upcoming work, meetings, reminders and todos.
+- Filter row: **All, Today, This week, Later, Done**, with an Overdue badge.
+- Type filters: **Work, Meeting, Reminder, Todo** (multi-select).
+- Grouped sections: **Overdue, Today, Tomorrow, This week, Later**.
+- Repeating items (daily, weekly, monthly) compute next occurrence in `Asia/Kolkata` timezone with completions tracked in `upcoming_completions`.
+- Inline details with notes, full timestamp, Edit, Snooze (1h / tomorrow / 1w), and quiet Delete.
+- Meeting time ranges (e.g. 3:00–3:30 PM) and nearest meeting indicator ("Next, in 45 min").
+- Quick-add natural language parsing in bottom sheet (e.g. "tomorrow 4pm", "fri 10am").
 
 ### Report
 - Range switch: **Week / Month / All time**.
@@ -92,32 +93,28 @@ create table daily_logs (
   unique (item_id, log_date)
 );
 
--- Weekly recurring tasks
-create table weekly_tasks (
+-- Unified Upcoming items (work, meeting, reminder, todo)
+create table upcoming_items (
   id            serial primary key,
-  name          text not null,
-  weekdays      int[] not null,               -- 0=Sun ... 6=Sat
-  reminder_time time,
-  active        boolean not null default true,
+  title         text not null,
+  type          text not null default 'todo' check (type in ('work', 'meeting', 'reminder', 'todo')),
+  due_at        timestamptz not null,
+  end_at        timestamptz,
+  has_time      boolean not null default true,
+  repeat        text check (repeat in ('daily', 'weekly', 'monthly')),
+  notes         text,
+  done_at       timestamptz,
+  snoozed_until timestamptz,
   created_at    timestamptz not null default now()
 );
 
-create table weekly_logs (
-  id       serial primary key,
-  task_id  int  not null references weekly_tasks(id) on delete cascade,
-  log_date date not null,
-  done     boolean not null default true,
-  unique (task_id, log_date)
-);
-
--- One-off future reminders
-create table future_reminders (
-  id         serial primary key,
-  title      text not null,
-  notes      text,
-  due_at     timestamptz not null,
-  done_at    timestamptz,
-  created_at timestamptz not null default now()
+-- Repeating item occurrence completions
+create table upcoming_completions (
+  id              serial primary key,
+  item_id         int not null references upcoming_items(id) on delete cascade,
+  occurrence_date date not null,
+  completed_at    timestamptz not null default now(),
+  unique (item_id, occurrence_date)
 );
 
 create table settings (
@@ -126,7 +123,9 @@ create table settings (
 );
 
 create index on daily_logs (log_date);
-create index on weekly_logs (log_date);
+create index on upcoming_items (due_at);
+create index on upcoming_items (done_at);
+create index on upcoming_completions (item_id, occurrence_date);
 create index on future_reminders (due_at);
 ```
 

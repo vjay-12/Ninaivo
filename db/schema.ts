@@ -43,7 +43,55 @@ export const dailyLogs = pgTable(
   })
 );
 
-// Weekly recurring tasks
+// Unified Upcoming Items (Work, Meetings, Reminders, Todos)
+export const upcomingItems = pgTable(
+  "upcoming_items",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull(),
+    type: text("type", { enum: ["work", "meeting", "reminder", "todo"] })
+      .notNull()
+      .default("todo"),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    endAt: timestamp("end_at", { withTimezone: true }),
+    hasTime: boolean("has_time").notNull().default(true),
+    repeat: text("repeat", { enum: ["daily", "weekly", "monthly"] }),
+    notes: text("notes"),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    dueAtIdx: index("upcoming_items_due_at_idx").on(table.dueAt),
+    doneAtIdx: index("upcoming_items_done_at_idx").on(table.doneAt),
+  })
+);
+
+// Repeating Item Completions (to keep history of each completed occurrence)
+export const upcomingCompletions = pgTable(
+  "upcoming_completions",
+  {
+    id: serial("id").primaryKey(),
+    itemId: integer("item_id")
+      .notNull()
+      .references(() => upcomingItems.id, { onDelete: "cascade" }),
+    occurrenceDate: date("occurrence_date").notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    itemOccurrenceUnique: unique().on(table.itemId, table.occurrenceDate),
+    itemDateIdx: index("upcoming_completions_item_date_idx").on(
+      table.itemId,
+      table.occurrenceDate
+    ),
+  })
+);
+
+// Legacy Weekly recurring tasks (retained until verified)
 export const weeklyTasks = pgTable("weekly_tasks", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -53,7 +101,7 @@ export const weeklyTasks = pgTable("weekly_tasks", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Weekly logs: per occurrence per date
+// Legacy Weekly logs (retained until verified)
 export const weeklyLogs = pgTable(
   "weekly_logs",
   {
@@ -70,7 +118,7 @@ export const weeklyLogs = pgTable(
   })
 );
 
-// One-off future reminders
+// Legacy Future reminders (retained until verified)
 export const futureReminders = pgTable(
   "future_reminders",
   {
@@ -95,7 +143,9 @@ export const settings = pgTable("settings", {
 export type Item = typeof items.$inferSelect;
 export type NewItem = typeof items.$inferInsert;
 export type DailyLog = typeof dailyLogs.$inferSelect;
+export type UpcomingItem = typeof upcomingItems.$inferSelect;
+export type NewUpcomingItem = typeof upcomingItems.$inferInsert;
+export type UpcomingCompletion = typeof upcomingCompletions.$inferSelect;
 export type WeeklyTask = typeof weeklyTasks.$inferSelect;
 export type WeeklyLog = typeof weeklyLogs.$inferSelect;
 export type FutureReminder = typeof futureReminders.$inferSelect;
-

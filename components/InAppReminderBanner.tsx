@@ -43,7 +43,7 @@ export default function InAppReminderBanner({ notices = [] }: { notices?: DueNot
 
           <div className="flex items-center gap-1.5 shrink-0">
             <Link
-              href={notice.type === "future" ? "/future" : "/today"}
+              href={notice.type === "item" ? "/today" : "/upcoming"}
               className="px-2.5 py-1 text-[11px] font-heading uppercase tracking-wider font-semibold bg-[#4FA3FF]/20 text-[#4FA3FF] hover:bg-[#4FA3FF]/30 rounded-lg transition-colors"
             >
               View

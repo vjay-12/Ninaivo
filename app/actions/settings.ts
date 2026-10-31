@@ -1,7 +1,16 @@
 "use server";
 
 import { db } from "@/db";
-import { settings, items, dailyLogs, weeklyTasks, weeklyLogs, futureReminders } from "@/db/schema";
+import {
+  settings,
+  items,
+  dailyLogs,
+  upcomingItems,
+  upcomingCompletions,
+  weeklyTasks,
+  weeklyLogs,
+  futureReminders,
+} from "@/db/schema";
 import { isUserAuthenticated, verifyPin, saveNewPinHashToDb } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
@@ -154,10 +163,45 @@ export async function importDatabaseBackup(data: any) {
     }
   }
 
+  // Restore upcoming items
+  if (Array.isArray(data.upcomingItems) && data.upcomingItems.length > 0) {
+    for (const item of data.upcomingItems) {
+      await db
+        .insert(upcomingItems)
+        .values({
+          id: item.id,
+          title: item.title,
+          type: item.type || "todo",
+          dueAt: new Date(item.dueAt),
+          endAt: item.endAt ? new Date(item.endAt) : null,
+          hasTime: item.hasTime !== false,
+          repeat: item.repeat || null,
+          notes: item.notes || null,
+          doneAt: item.doneAt ? new Date(item.doneAt) : null,
+          snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil) : null,
+        })
+        .onConflictDoNothing();
+    }
+  }
+
+  // Restore upcoming completions
+  if (Array.isArray(data.upcomingCompletions) && data.upcomingCompletions.length > 0) {
+    for (const comp of data.upcomingCompletions) {
+      await db
+        .insert(upcomingCompletions)
+        .values({
+          id: comp.id,
+          itemId: comp.itemId,
+          occurrenceDate: comp.occurrenceDate,
+          completedAt: new Date(comp.completedAt),
+        })
+        .onConflictDoNothing();
+    }
+  }
+
   revalidatePath("/today");
   revalidatePath("/daily");
-  revalidatePath("/weekly");
-  revalidatePath("/future");
+  revalidatePath("/upcoming");
   revalidatePath("/report");
   return { success: true };
 }

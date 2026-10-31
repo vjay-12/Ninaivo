@@ -20,13 +20,15 @@ Built with **Next.js (App Router) + TypeScript + Tailwind CSS**, backed by **Neo
 - **Daily (Manage)**:
   - Add, edit, delete, reorder, and toggle daily items.
   - Seeded starter items: *Brush at night*, *Eggs*, *Fruits (3)*.
-- **Weekly**:
-  - Interactive Mon–Sun week strip with task indicator dots.
-  - Manage tasks that repeat on specific weekdays with optional reminder times.
-  - Ticks stored per date occurrence for accurate historical reporting.
-- **Future**:
-  - One-off reminders grouped into **Overdue**, **Due Today**, **Upcoming**, and **Completed**.
-  - Add, edit, delete, and mark done/undone.
+- **Upcoming (Merged Weekly + Future)**:
+  - Unified list for Work, Meetings, Reminders, and Todos.
+  - Filter chips: **All, Today, This week, Later, Done**, with an Overdue count badge.
+  - Multi-select type filters: Work (`#4FA3FF`), Meeting (`#3D7EFF`), Reminder (`#E4101E`), Todo (`#9CA3AF`).
+  - Grouped sections: Overdue, Today, Tomorrow, This week, Later.
+  - Repeating items (Daily, Weekly, Monthly) with completion tracking in `upcoming_completions`.
+  - Meeting time ranges with "Next, in 45 min" indicators.
+  - Inline accordion with Snooze (1 hour, Tomorrow, Next week), Edit, and quiet Delete.
+  - Quick-add natural language detection in bottom sheet.
 - **Report**:
   - Filter by **7 Days / 30 Days / All Time**.
   - Key metrics: Overall completion %, active streak, best streak, and perfect 100% days.

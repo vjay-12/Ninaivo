@@ -1,7 +1,16 @@
 "use server";
 
 import { db } from "@/db";
-import { items, dailyLogs, weeklyTasks, weeklyLogs, futureReminders, settings } from "@/db/schema";
+import {
+  items,
+  dailyLogs,
+  upcomingItems,
+  upcomingCompletions,
+  weeklyTasks,
+  weeklyLogs,
+  futureReminders,
+  settings,
+} from "@/db/schema";
 import { computeReport, ReportRange } from "@/lib/report";
 import { isUserAuthenticated } from "@/lib/auth";
 import { asc } from "drizzle-orm";
@@ -17,6 +26,8 @@ export async function exportDatabaseBackup() {
   const [
     allItems,
     allDailyLogs,
+    allUpcoming,
+    allUpcomingComp,
     allWeeklyTasks,
     allWeeklyLogs,
     allReminders,
@@ -24,17 +35,21 @@ export async function exportDatabaseBackup() {
   ] = await Promise.all([
     db.select().from(items).orderBy(asc(items.id)),
     db.select().from(dailyLogs).orderBy(asc(dailyLogs.logDate)),
-    db.select().from(weeklyTasks).orderBy(asc(weeklyTasks.id)),
-    db.select().from(weeklyLogs).orderBy(asc(weeklyLogs.logDate)),
-    db.select().from(futureReminders).orderBy(asc(futureReminders.dueAt)),
+    db.select().from(upcomingItems).orderBy(asc(upcomingItems.id)).catch(() => []),
+    db.select().from(upcomingCompletions).orderBy(asc(upcomingCompletions.id)).catch(() => []),
+    db.select().from(weeklyTasks).orderBy(asc(weeklyTasks.id)).catch(() => []),
+    db.select().from(weeklyLogs).orderBy(asc(weeklyLogs.logDate)).catch(() => []),
+    db.select().from(futureReminders).orderBy(asc(futureReminders.dueAt)).catch(() => []),
     db.select().from(settings),
   ]);
 
   return {
-    version: "1.0",
+    version: "2.0",
     exportedAt: new Date().toISOString(),
     items: allItems,
     dailyLogs: allDailyLogs,
+    upcomingItems: allUpcoming,
+    upcomingCompletions: allUpcomingComp,
     weeklyTasks: allWeeklyTasks,
     weeklyLogs: allWeeklyLogs,
     futureReminders: allReminders,
@@ -62,4 +77,3 @@ export async function exportDailyLogsCsv(): Promise<string> {
 
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }
-

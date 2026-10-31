@@ -30,11 +30,11 @@ export default function TodayDashboard({
   const [futureReminders, setFutureReminders] = useState(initialReminders);
 
   // Calculate totals
-  const totalItems = checklist.length + diet.length + weekly.length;
+  const totalItems = checklist.length + diet.length + futureReminders.length;
   const completedItems =
     checklist.filter((i) => i.done).length +
     diet.filter((i) => i.done).length +
-    weekly.filter((w) => w.done).length;
+    futureReminders.filter((r) => r.doneAt).length;
 
   // Toggle checklist or diet item count
   const handleItemCountUpdate = async (id: number, count: number, targetCount: number, type: "checklist" | "diet") => {
