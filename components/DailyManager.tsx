@@ -3,11 +3,22 @@
 import { useState } from "react";
 import { Item } from "@/db/schema";
 import { createItem, updateItem, deleteItem, reorderItems } from "@/app/actions/daily";
-import { Plus, Edit2, Trash2, ArrowUp, ArrowDown, Clock, Check, Apple, Sparkles, X } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Check,
+  Apple,
+  X,
+  ChevronDown,
+} from "lucide-react";
 import { formatTimeDisplay } from "@/lib/date";
 
 export default function DailyManager({ initialItems }: { initialItems: Item[] }) {
   const [itemsList, setItemsList] = useState<Item[]>(initialItems);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
@@ -17,6 +28,10 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
   const [targetCount, setTargetCount] = useState(1);
   const [reminderTime, setReminderTime] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  const toggleExpand = (id: number) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
 
   const openAddModal = () => {
     setEditingItem(null);
@@ -69,7 +84,6 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
           targetCount: type === "checklist" ? 1 : targetCount,
           reminderTime: reminderTime ? `${reminderTime}:00` : null,
         });
-        // Reload page to reflect new item
         window.location.reload();
       }
       setIsModalOpen(false);
@@ -79,8 +93,9 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this routine item?")) return;
+    if (!window.confirm("Delete this item? Its history will also be removed")) return;
     setItemsList((prev) => prev.filter((i) => i.id !== id));
+    if (expandedId === id) setExpandedId(null);
     await deleteItem(id);
   };
 
@@ -106,165 +121,236 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-white uppercase">
+      {/* Header with Title and Single-line '+ New item' button */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-3 min-h-[40px]">
+          <h1 className="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-white uppercase leading-none">
             Manage Daily Items
           </h1>
-          <p className="text-xs text-[#8A92A3] mt-1">
-            Configure checklist routines and diet targets that repeat daily
-          </p>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="shrink-0 h-10 w-[134px] px-4 rounded-lg bg-[#4FA3FF] hover:bg-[#3fa0ff] text-[#08080A] font-medium text-xs whitespace-nowrap active:scale-[0.98] transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
+            <span>+ New item</span>
+          </button>
         </div>
-
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#4FA3FF] to-[#0B3A82] text-white font-heading font-bold text-xs uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all shadow-lg min-h-[44px]"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Item</span>
-        </button>
+        <p className="text-xs text-[#8A92A3] max-w-xs sm:max-w-md leading-relaxed">
+          Configure checklist routines and diet targets that repeat daily
+        </p>
       </div>
 
       {/* Items List */}
       <div className="space-y-3">
-        {itemsList.map((item, index) => {
-          const isChecklist = item.type === "checklist";
-          return (
-            <div
-              key={item.id}
-              className={`flex items-center justify-between p-4 rounded-xl bg-[#111216] border transition-all ${
-                item.active
-                  ? "border-white/10 hover:border-white/20"
-                  : "border-white/5 opacity-50 bg-[#08080A]"
-              }`}
-            >
-              {/* Left Details */}
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div
-                  className={`w-7 h-7 rounded-lg -skew-x-6 flex items-center justify-center shrink-0 ${
-                    isChecklist ? "bg-[#4FA3FF]/20 text-[#4FA3FF]" : "bg-[#E4101E]/20 text-[#E4101E]"
-                  }`}
-                >
-                  <div className="skew-x-6">
-                    {isChecklist ? <Check className="w-4 h-4" /> : <Apple className="w-4 h-4" />}
-                  </div>
-                </div>
+        {itemsList.length === 0 ? (
+          <div className="p-8 rounded-xl bg-[#111216] border border-white/5 text-center text-xs text-[#8A92A3]">
+            No daily items configured yet. Tap "+ New item" to create one.
+          </div>
+        ) : (
+          itemsList.map((item, index) => {
+            const isChecklist = item.type === "checklist";
+            const isExpanded = expandedId === item.id;
 
-                <div className="truncate">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-white text-sm sm:text-base truncate">
-                      {item.name}
-                    </p>
-                    <span
-                      className={`text-[10px] font-heading font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+            return (
+              <div
+                key={item.id}
+                className={`rounded-xl bg-[#111216] border transition-all duration-200 overflow-hidden ${
+                  isExpanded ? "border-white/20" : "border-white/10 hover:border-white/15"
+                } ${!item.active ? "opacity-50" : ""}`}
+              >
+                {/* Simplified Row Header (Tap to toggle expand) */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleExpand(item.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleExpand(item.id);
+                    }
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 sm:p-4 min-h-[56px] cursor-pointer select-none text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
+                    {/* Checkbox / Type Icon */}
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
                         isChecklist
-                          ? "bg-[#4FA3FF]/10 text-[#4FA3FF] border border-[#4FA3FF]/20"
-                          : "bg-[#E4101E]/10 text-[#E4101E] border border-[#E4101E]/20"
+                          ? "bg-[#4FA3FF]/10 border-[#4FA3FF]/30 text-[#4FA3FF]"
+                          : "bg-[#E4101E]/10 border-[#E4101E]/30 text-[#E4101E]"
                       }`}
                     >
-                      {isChecklist ? "Checklist" : `Diet (${item.targetCount})`}
-                    </span>
+                      {isChecklist ? (
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      ) : (
+                        <Apple className="w-3.5 h-3.5 stroke-[2.2]" />
+                      )}
+                    </div>
+
+                    {/* Item Name (wraps up to 2 lines) & Secondary info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-sm sm:text-base leading-snug break-words line-clamp-2">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-[#8A92A3] mt-0.5 truncate">
+                        {item.reminderTime && `${formatTimeDisplay(item.reminderTime)} • `}
+                        {isChecklist ? "Checklist" : `Diet · ${item.targetCount} target`}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-[#8A92A3] mt-1">
-                    {item.reminderTime && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatTimeDisplay(item.reminderTime)}
-                      </span>
-                    )}
-                    <span>{item.active ? "Active" : "Disabled"}</span>
+                  {/* Expand / Collapse Chevron */}
+                  <ChevronDown
+                    className={`w-4 h-4 text-[#8A92A3] shrink-0 transition-transform duration-200 ${
+                      isExpanded ? "rotate-180 text-white" : ""
+                    }`}
+                  />
+                </div>
+
+                {/* Inline Details Accordion (Only one open at a time) */}
+                {isExpanded && (
+                  <div className="border-t border-white/5 bg-[#0D0E12] p-4 space-y-3.5 transition-all duration-200">
+                    {/* Meta info boxes */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-[#14151B] border border-white/5 rounded-lg p-2.5">
+                        <span className="text-[#8A92A3] block text-[11px]">Category</span>
+                        <span className="text-white font-medium capitalize mt-0.5 block">
+                          {isChecklist
+                            ? "Checklist (1 tick)"
+                            : `Diet (${item.targetCount} portions)`}
+                        </span>
+                      </div>
+                      <div className="bg-[#14151B] border border-white/5 rounded-lg p-2.5">
+                        <span className="text-[#8A92A3] block text-[11px]">Reminder time</span>
+                        <span className="text-white font-medium mt-0.5 block">
+                          {item.reminderTime ? formatTimeDisplay(item.reminderTime) : "None"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Active on/off switch */}
+                    <div className="flex items-center justify-between py-1">
+                      <div>
+                        <span className="text-xs font-medium text-white block">Active</span>
+                        <span className="text-[11px] text-[#8A92A3] block">
+                          {item.active ? "Included in daily routine" : "Paused from daily routine"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={item.active}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleActive(item);
+                        }}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          item.active ? "bg-[#4FA3FF]" : "bg-[#232630]"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            item.active ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Bottom Actions: Reorder, Edit, and Quiet Delete */}
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                      <div className="flex items-center gap-2">
+                        {/* Reorder Arrows */}
+                        <div className="flex items-center bg-[#14151B] border border-white/10 rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMove(index, "up");
+                            }}
+                            disabled={index === 0}
+                            className="p-2 text-[#8A92A3] hover:text-white disabled:opacity-20 hover:bg-white/5 transition-colors"
+                            aria-label="Move up"
+                            title="Move up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <div className="w-[1px] h-3.5 bg-white/10" />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMove(index, "down");
+                            }}
+                            disabled={index === itemsList.length - 1}
+                            className="p-2 text-[#8A92A3] hover:text-white disabled:opacity-20 hover:bg-white/5 transition-colors"
+                            aria-label="Move down"
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Edit Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(item);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-white/5 border border-white/10 text-white text-xs font-medium transition-colors min-h-[34px]"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-[#8A92A3]" />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+
+                      {/* Delete Button (Quiet red text button) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item.id);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#E4101E]/80 hover:text-[#E4101E] hover:bg-[#E4101E]/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-
-              {/* Actions & Reordering */}
-              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                {/* Active Toggle */}
-                <button
-                  type="button"
-                  onClick={() => handleToggleActive(item)}
-                  className={`px-2.5 py-1 text-xs rounded-lg font-heading font-semibold uppercase tracking-wider transition-colors min-h-[36px] ${
-                    item.active
-                      ? "bg-white/10 text-white hover:bg-white/20"
-                      : "bg-white/5 text-[#8A92A3] hover:text-white"
-                  }`}
-                >
-                  {item.active ? "On" : "Off"}
-                </button>
-
-                {/* Move Up/Down */}
-                <div className="flex items-center bg-[#1A1C22] rounded-lg border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => handleMove(index, "up")}
-                    disabled={index === 0}
-                    className="p-1.5 text-[#8A92A3] hover:text-white disabled:opacity-20 transition-colors"
-                    aria-label="Move Up"
-                  >
-                    <ArrowUp className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMove(index, "down")}
-                    disabled={index === itemsList.length - 1}
-                    className="p-1.5 text-[#8A92A3] hover:text-white disabled:opacity-20 transition-colors"
-                    aria-label="Move Down"
-                  >
-                    <ArrowDown className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Edit */}
-                <button
-                  type="button"
-                  onClick={() => openEditModal(item)}
-                  className="p-2 text-[#8A92A3] hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                  aria-label="Edit item"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-
-                {/* Delete */}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(item.id)}
-                  className="p-2 text-[#8A92A3] hover:text-[#E4101E] hover:bg-[#E4101E]/10 rounded-lg transition-colors"
-                  aria-label="Delete item"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md bg-[#111216] border border-white/10 rounded-2xl p-6 shadow-2xl overflow-hidden">
-            {/* Top Stripe */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 m-stripe-horizontal" />
+          <div className="relative w-full max-w-md bg-[#111216] border border-white/10 rounded-xl p-5 sm:p-6 shadow-2xl overflow-hidden">
+            {/* Restrained Accent Stripe */}
+            <div className="absolute top-0 left-0 right-0 h-1 m-stripe-horizontal" />
 
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-heading font-bold text-xl uppercase tracking-wider text-white">
-                {editingItem ? "Edit Routine Item" : "Create Routine Item"}
+            <div className="flex items-center justify-between mb-4 pt-1">
+              <h2 className="text-base font-semibold text-white">
+                {editingItem ? "Edit item" : "Create item"}
               </h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="p-1 text-[#8A92A3] hover:text-white rounded-lg transition-colors"
+                aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-xs font-heading uppercase tracking-wider text-[#8A92A3] mb-1.5">
-                  Item Name *
+                <label className="block text-xs font-medium text-[#8A92A3] mb-1.5">
+                  Item name *
                 </label>
                 <input
                   type="text"
@@ -272,13 +358,13 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
                   placeholder="e.g. Brush at night, Drink water"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#1A1C22] border border-white/10 text-white text-sm focus:outline-none focus:border-[#4FA3FF]"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#14151B] border border-white/10 text-white text-sm focus:outline-none focus:border-[#4FA3FF]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-heading uppercase tracking-wider text-[#8A92A3] mb-1.5">
-                  Category Type
+                <label className="block text-xs font-medium text-[#8A92A3] mb-1.5">
+                  Category
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -287,10 +373,10 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
                       setType("checklist");
                       setTargetCount(1);
                     }}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-heading font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    className={`py-2 px-3 rounded-lg border text-xs font-medium flex items-center justify-center gap-2 transition-colors ${
                       type === "checklist"
-                        ? "bg-[#4FA3FF]/20 border-[#4FA3FF] text-[#4FA3FF]"
-                        : "bg-[#1A1C22] border-white/10 text-[#8A92A3]"
+                        ? "bg-[#4FA3FF]/15 border-[#4FA3FF] text-[#4FA3FF]"
+                        : "bg-[#14151B] border-white/10 text-[#8A92A3] hover:text-white"
                     }`}
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -303,10 +389,10 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
                       setType("diet");
                       if (targetCount === 1) setTargetCount(3);
                     }}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-heading font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    className={`py-2 px-3 rounded-lg border text-xs font-medium flex items-center justify-center gap-2 transition-colors ${
                       type === "diet"
-                        ? "bg-[#E4101E]/20 border-[#E4101E] text-[#E4101E]"
-                        : "bg-[#1A1C22] border-white/10 text-[#8A92A3]"
+                        ? "bg-[#E4101E]/15 border-[#E4101E] text-[#E4101E]"
+                        : "bg-[#14151B] border-white/10 text-[#8A92A3] hover:text-white"
                     }`}
                   >
                     <Apple className="w-3.5 h-3.5" />
@@ -317,8 +403,8 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
 
               {type === "diet" && (
                 <div>
-                  <label className="block text-xs font-heading uppercase tracking-wider text-[#8A92A3] mb-1.5">
-                    Target Count per Day (1 for single tick, 3 for fruits)
+                  <label className="block text-xs font-medium text-[#8A92A3] mb-1.5">
+                    Target portions per day
                   </label>
                   <input
                     type="number"
@@ -326,37 +412,37 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
                     max="20"
                     value={targetCount}
                     onChange={(e) => setTargetCount(parseInt(e.target.value, 10) || 1)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1A1C22] border border-white/10 text-white text-sm focus:outline-none focus:border-[#E4101E]"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-[#14151B] border border-white/10 text-white text-sm focus:outline-none focus:border-[#E4101E]"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-heading uppercase tracking-wider text-[#8A92A3] mb-1.5">
-                  Reminder Time (Optional)
+                <label className="block text-xs font-medium text-[#8A92A3] mb-1.5">
+                  Reminder time (optional)
                 </label>
                 <input
                   type="time"
                   value={reminderTime}
                   onChange={(e) => setReminderTime(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#1A1C22] border border-white/10 text-white text-sm focus:outline-none focus:border-[#4FA3FF]"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#14151B] border border-white/10 text-white text-sm focus:outline-none focus:border-[#4FA3FF]"
                 />
               </div>
 
-              <div className="pt-3 flex gap-2">
+              <div className="pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-3 rounded-xl bg-[#1A1C22] hover:bg-white/10 text-[#8A92A3] font-heading font-semibold text-xs uppercase tracking-wider transition-colors min-h-[44px]"
+                  className="flex-1 py-2.5 rounded-lg bg-[#14151B] hover:bg-white/5 border border-white/10 text-[#8A92A3] hover:text-white font-medium text-xs transition-colors min-h-[40px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#4FA3FF] to-[#0B3A82] text-white font-heading font-bold text-xs uppercase tracking-wider hover:opacity-95 transition-all min-h-[44px] flex items-center justify-center shadow-lg"
+                  className="flex-1 py-2.5 rounded-lg bg-[#4FA3FF] hover:bg-[#3fa0ff] text-[#08080A] font-semibold text-xs transition-colors min-h-[40px] flex items-center justify-center disabled:opacity-50"
                 >
-                  {isSaving ? "Saving..." : editingItem ? "Update" : "Create Item"}
+                  {isSaving ? "Saving..." : editingItem ? "Update" : "Save item"}
                 </button>
               </div>
             </form>
@@ -366,4 +452,3 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
     </div>
   );
 }
-
