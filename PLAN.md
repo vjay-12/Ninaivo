@@ -221,6 +221,16 @@ m-routine/
 - **Phase 1 (in-app):** while the app is open, due reminders show a banner and optionally a browser notification.
 - **Phase 2 (true push):** PWA + Web Push. Note that **Vercel Hobby cron runs at most once per day**, so exact-time push needs either an external free scheduler (e.g. cron-job.org hitting an API route) or a Vercel Pro plan. This is an honest limitation to decide on later.
 
+## 8.1 Background Music
+
+- **Audio Asset:** `public/audio/ninaivo-theme.mp3` (~1.34 MB, lightweight for mobile data, loaded with `preload="metadata"`).
+- **Single Mount:** Mounted once in root layout (`app/layout.tsx`) so audio continues seamlessly across tab switches and never restarts.
+- **Autoplay Handling:** Browser autoplay block is caught silently with zero popups or errors. Playback automatically starts on first user interaction anywhere in the app (e.g. first PIN keypad tap on login).
+- **Volume & Fading:** Default volume `0.4`, fading in over 1.5s and fading out over 0.5s. Respects `prefers-reduced-motion` with instant transitions.
+- **Background Protection:** Sound stops immediately when the user leaves the app (`visibilitychange` / `document.hidden`, `pagehide`, and `window.blur`). Automatically resumes when the app becomes visible again, only if not muted.
+- **No Media Session Controls:** Clears `navigator.mediaSession` metadata and sets playback state to `'none'` to prevent unwanted lock-screen or notification tray controls.
+- **Mute Control:** Icon button immediately left of the Settings gear in the header (`Volume2` / `VolumeX`). State persisted in `localStorage` (`"ninaivo-muted"`). When muted, audio never plays, including on first interaction. Minimum 44px tap target.
+
 ## 9. Environment Variables
 
 ```

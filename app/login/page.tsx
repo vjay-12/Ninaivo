@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { loginAction } from "@/app/actions/auth";
 import { ShieldCheck, KeyRound, AlertCircle, ArrowRight, Delete } from "lucide-react";
+import { MuteButton } from "@/components/BackgroundMusic";
 
 export default function LoginPage() {
   const [pin, setPin] = useState("");
@@ -51,6 +52,11 @@ export default function LoginPage() {
         <div className="relative bg-[#111216] border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-6 sm:p-8">
           {/* Top M-stripe accent line */}
           <div className="absolute top-0 left-0 right-0 h-1.5 m-stripe-horizontal" />
+
+          {/* Top-right Mute toggle */}
+          <div className="absolute top-3 right-3 z-10">
+            <MuteButton />
+          </div>
 
           {/* Header */}
           <div className="text-center mb-6 pt-2">

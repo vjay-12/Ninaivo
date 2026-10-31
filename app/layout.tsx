@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
+import { BackgroundMusicProvider } from "@/components/BackgroundMusic";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -49,7 +50,9 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.variable} ${barlow.variable} font-sans carbon-pattern text-[#F3F5F8] min-h-screen selection:bg-[#4FA3FF]/30 selection:text-white`}>
         <PwaRegister />
-        {children}
+        <BackgroundMusicProvider>
+          {children}
+        </BackgroundMusicProvider>
       </body>
     </html>
   );

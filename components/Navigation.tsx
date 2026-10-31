@@ -11,6 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
+import { MuteButton } from "@/components/BackgroundMusic";
 
 const navItems = [
   { href: "/today", label: "Today", icon: CalendarCheck2 },
@@ -108,10 +109,10 @@ export function DesktopSidebar() {
           );
         })}
 
-        <div className="pt-4 border-t border-white/10">
+        <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-1">
           <Link
             href="/settings"
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-heading tracking-wide transition-all min-h-[44px] ${
+            className={`flex-1 flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-heading tracking-wide transition-all min-h-[44px] ${
               pathname === "/settings"
                 ? "bg-[#1A1C22] text-white font-bold border-l-4 border-l-[#E4101E]"
                 : "text-[#8A92A3] hover:text-white hover:bg-white/5"
@@ -120,6 +121,7 @@ export function DesktopSidebar() {
             <Settings className="w-5 h-5 text-[#8A92A3]" />
             <span className="text-base">Settings</span>
           </Link>
+          <MuteButton />
         </div>
       </nav>
 
@@ -141,7 +143,7 @@ export function DesktopSidebar() {
 
 export function MobileTopHeader() {
   return (
-    <header className="md:hidden sticky top-0 z-30 bg-[#08080A]/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
+    <header className="md:hidden sticky top-0 z-30 bg-[#08080A]/90 backdrop-blur-md border-b border-white/10 px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2.5">
         <div className="w-6 h-6 rounded bg-[#1A1C22] flex items-center justify-center p-1 border border-white/10 overflow-hidden">
           <div className="w-full h-full m-stripe-diagonal -skew-x-12" />
@@ -151,10 +153,11 @@ export function MobileTopHeader() {
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <MuteButton />
         <Link
           href="/settings"
-          className="p-2 text-[#8A92A3] hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 text-[#8A92A3] hover:text-white rounded-lg hover:bg-white/5 transition-colors focus:outline-none focus:ring-1 focus:ring-[#4FA3FF]"
           aria-label="Settings"
         >
           <Settings className="w-5 h-5" />
