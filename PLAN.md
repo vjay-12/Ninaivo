@@ -231,6 +231,86 @@ m-routine/
 - **No Media Session Controls:** Clears `navigator.mediaSession` metadata and sets playback state to `'none'` to prevent unwanted lock-screen or notification tray controls.
 - **Mute Control:** Icon button immediately left of the Settings gear in the header (`Volume2` / `VolumeX`). State persisted in `localStorage` (`"ninaivo-muted"`). When muted, audio never plays, including on first interaction. Minimum 44px tap target.
 
+## 8.2 Backup and Restore Specification
+
+### JSON Format (`v1`)
+Backups are exported in authenticated streaming mode via `/api/backup/export` as `ninaivo-backup-YYYY-MM-DD-HHmm.json`.
+
+```json
+{
+  "app": "ninaivo",
+  "version": 1,
+  "exportedAt": "2026-10-31T23:30:00.000Z",
+  "timezone": "Asia/Kolkata",
+  "counts": {
+    "items": 3,
+    "dailyLogs": 12,
+    "upcoming": 5,
+    "completions": 2,
+    "settings": 2
+  },
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "Brush at night",
+        "type": "checklist",
+        "targetCount": 1,
+        "reminderTime": "22:30:00",
+        "sortOrder": 0,
+        "active": true
+      }
+    ],
+    "dailyLogs": [
+      {
+        "id": 10,
+        "itemId": 1,
+        "logDate": "2026-10-31",
+        "count": 1,
+        "done": true
+      }
+    ],
+    "upcoming": [
+      {
+        "id": 4,
+        "title": "Weekly Strategy",
+        "type": "meeting",
+        "dueAt": "2026-11-02T09:30:00.000Z",
+        "endAt": "2026-11-02T10:00:00.000Z",
+        "hasTime": true,
+        "repeat": "weekly",
+        "notes": "Bring metrics",
+        "doneAt": null,
+        "snoozedUntil": null
+      }
+    ],
+    "completions": [
+      {
+        "id": 2,
+        "itemId": 4,
+        "occurrenceDate": "2026-10-26",
+        "completedAt": "2026-10-26T10:00:00.000Z"
+      }
+    ],
+    "settings": {
+      "timezone": { "tz": "Asia/Kolkata" },
+      "last_backup_at": { "date": "2026-10-31T23:30:00.000Z" }
+    }
+  }
+}
+```
+
+### Security & Privacy Rules
+- Secrets are **never** included: PIN hashes, session keys, and sensitive environment variables are strictly filtered out during export and ignored during restore.
+
+### Migration & Versioning (Handling Version 2)
+- Current parser accepts `version <= 1`.
+- When `version: 2` is released in the future:
+  1. The schema validator will support `version: 2`.
+  2. For legacy `version: 1` files, an in-memory upgrade adapter function (`migrateV1ToV2(payload)`) will transform v1 structures to v2 before running the restore transaction.
+  3. If a user tries to restore a file with `version > APP_SUPPORTED_VERSION`, the app refuses gracefully: *"This backup was created by a newer version of Ninaivo (v<version>). Please update the app to import it."*
+
+
 ## 9. Environment Variables
 
 ```

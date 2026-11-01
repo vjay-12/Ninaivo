@@ -206,3 +206,28 @@ export function computeNextRecurrence(
 
   return next;
 }
+
+/**
+ * Generates backup filename formatted as ninaivo-backup-YYYY-MM-DD-HHmm.json in user's timezone
+ */
+export function getBackupFilename(timeZone: string = DEFAULT_TZ): string {
+  const now = new Date();
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || "00";
+    return `ninaivo-backup-${get("year")}-${get("month")}-${get("day")}-${get("hour")}${get("minute")}.json`;
+  } catch {
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `ninaivo-backup-${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}.json`;
+  }
+}
+
