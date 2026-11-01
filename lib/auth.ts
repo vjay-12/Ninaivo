@@ -131,22 +131,26 @@ export async function verifyPinAndCreateSession(pin: string): Promise<{ success:
  */
 export async function saveNewPinHashToDb(newPin: string): Promise<void> {
   const newHash = await bcrypt.hash(newPin, 10);
+  const now = new Date();
   await db
     .insert(settings)
     .values({
       key: "app_pin_hash",
+      uuid: crypto.randomUUID(),
       value: {
         hash: newHash,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now.toISOString(),
       },
+      updatedAt: now,
     })
     .onConflictDoUpdate({
       target: settings.key,
       set: {
         value: {
           hash: newHash,
-          updatedAt: new Date().toISOString(),
+          updatedAt: now.toISOString(),
         },
+        updatedAt: now,
       },
     });
 

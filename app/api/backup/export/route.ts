@@ -56,7 +56,7 @@ export async function GET(req: Request) {
   }
 
   const now = new Date();
-  const tz = cleanSettings.timezone?.tz || DEFAULT_TZ;
+  const tz = DEFAULT_TZ;
   const filename = getBackupFilename(tz);
 
   // Record last backup timestamp in settings
@@ -64,11 +64,13 @@ export async function GET(req: Request) {
     .insert(settings)
     .values({
       key: "last_backup_at",
+      uuid: crypto.randomUUID(),
       value: { date: now.toISOString() },
+      updatedAt: now,
     })
     .onConflictDoUpdate({
       target: settings.key,
-      set: { value: { date: now.toISOString() } },
+      set: { value: { date: now.toISOString() }, updatedAt: now },
     });
 
   const payload = {

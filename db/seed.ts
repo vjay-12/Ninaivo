@@ -15,6 +15,7 @@ async function seed() {
   if (existing.length === 0) {
     await db.insert(schema.items).values([
       {
+        uuid: crypto.randomUUID(),
         name: "Brush at night",
         type: "checklist",
         targetCount: 1,
@@ -23,6 +24,7 @@ async function seed() {
         active: true,
       },
       {
+        uuid: crypto.randomUUID(),
         name: "Eggs",
         type: "diet",
         targetCount: 1,
@@ -31,6 +33,7 @@ async function seed() {
         active: true,
       },
       {
+        uuid: crypto.randomUUID(),
         name: "Fruits",
         type: "diet",
         targetCount: 3,
@@ -49,6 +52,7 @@ async function seed() {
     .insert(schema.settings)
     .values({
       key: "timezone",
+      uuid: crypto.randomUUID(),
       value: { tz: process.env.TZ_DEFAULT || "Asia/Kolkata" },
     })
     .onConflictDoNothing();

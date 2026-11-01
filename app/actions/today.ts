@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 
 export interface TodayItemData {
   id: number;
+  uuid: string;
   name: string;
   type: "checklist" | "diet";
   targetCount: number;
@@ -45,7 +46,7 @@ export async function getTodayData(targetDate?: string) {
   const allItems = await db
     .select()
     .from(items)
-    .where(eq(items.active, true))
+    .where(and(eq(items.active, true), isNull(items.deletedAt)))
     .orderBy(asc(items.sortOrder), asc(items.id));
 
   // 2. Fetch logs for this date
@@ -84,6 +85,7 @@ export async function getTodayData(targetDate?: string) {
   const allUpcoming = await db
     .select()
     .from(upcomingItems)
+    .where(isNull(upcomingItems.deletedAt))
     .orderBy(asc(upcomingItems.dueAt));
 
   const reminders: TodayFutureReminderData[] = [];
@@ -93,12 +95,17 @@ export async function getTodayData(targetDate?: string) {
   const todayCompletions = await db
     .select()
     .from(upcomingCompletions)
-    .where(eq(upcomingCompletions.occurrenceDate, dateStr));
+    .where(and(eq(upcomingCompletions.occurrenceDate, dateStr), isNull(upcomingCompletions.deletedAt)));
   const completionSet = new Set(todayCompletions.map((c) => c.itemId));
 
   for (const item of allUpcoming) {
     // If snoozed past now, ignore
     if (item.snoozedUntil && new Date(item.snoozedUntil).getTime() > now.getTime()) {
+      continue;
+    }
+
+    // Items with no date never appear in Today's due/overdue list
+    if (!item.dueAt) {
       continue;
     }
 
@@ -155,6 +162,7 @@ export async function setItemCount(itemId: number, count: number, targetCount: n
   await db
     .insert(dailyLogs)
     .values({
+      uuid: crypto.randomUUID(),
       itemId,
       logDate: dateStr,
       count: safeCount,

@@ -15,26 +15,6 @@ export async function getSettingsData() {
   return settingsMap;
 }
 
-export async function updateTimezoneSetting(tz: string) {
-  const auth = await isUserAuthenticated();
-  if (!auth) throw new Error("Unauthorized");
-
-  await db
-    .insert(settings)
-    .values({
-      key: "timezone",
-      value: { tz },
-    })
-    .onConflictDoUpdate({
-      target: settings.key,
-      set: { value: { tz } },
-    });
-
-  revalidatePath("/settings");
-  revalidatePath("/today");
-  return { success: true };
-}
-
 export async function changePinAction(currentPin: string, newPin: string) {
   const auth = await isUserAuthenticated();
   if (!auth) throw new Error("Unauthorized");

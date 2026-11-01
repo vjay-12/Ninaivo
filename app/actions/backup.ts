@@ -240,12 +240,14 @@ export async function restoreDatabaseData(
             const [inserted] = await tx
               .insert(items)
               .values({
+                uuid: (item as any).uuid || crypto.randomUUID(),
                 name: item.name,
                 type: item.type,
                 targetCount: item.targetCount,
                 reminderTime: item.reminderTime || null,
                 sortOrder: item.sortOrder || 0,
                 active: item.active !== false,
+                updatedAt: new Date(),
               })
               .returning({ id: items.id });
 
@@ -259,12 +261,14 @@ export async function restoreDatabaseData(
           const [inserted] = await tx
             .insert(items)
             .values({
+              uuid: (item as any).uuid || crypto.randomUUID(),
               name: item.name,
               type: item.type,
               targetCount: item.targetCount,
               reminderTime: item.reminderTime || null,
               sortOrder: item.sortOrder || 0,
               active: item.active !== false,
+              updatedAt: new Date(),
             })
             .returning({ id: items.id });
 
@@ -279,6 +283,7 @@ export async function restoreDatabaseData(
         await tx
           .insert(dailyLogs)
           .values({
+            uuid: (log as any).uuid || crypto.randomUUID(),
             itemId: mappedItemId,
             logDate: log.logDate,
             count: log.count,
@@ -305,13 +310,13 @@ export async function restoreDatabaseData(
         const existingUpcoming = await tx.select().from(upcomingItems);
         const upcomingMapByKey = new Map(
           existingUpcoming.map((u) => [
-            `${u.title.trim().toLowerCase()}::${new Date(u.dueAt).toISOString()}`,
+            `${u.title.trim().toLowerCase()}::${u.dueAt ? new Date(u.dueAt).toISOString() : "nodate"}`,
             u,
           ])
         );
 
         for (const item of bUpcoming) {
-          const key = `${item.title.trim().toLowerCase()}::${new Date(item.dueAt).toISOString()}`;
+          const key = `${item.title.trim().toLowerCase()}::${item.dueAt ? new Date(item.dueAt).toISOString() : "nodate"}`;
           const existing = upcomingMapByKey.get(key);
 
           if (existing) {
@@ -320,15 +325,17 @@ export async function restoreDatabaseData(
             const [inserted] = await tx
               .insert(upcomingItems)
               .values({
+                uuid: (item as any).uuid || crypto.randomUUID(),
                 title: item.title,
                 type: item.type,
-                dueAt: new Date(item.dueAt),
+                dueAt: item.dueAt ? new Date(item.dueAt) : null,
                 endAt: item.endAt ? new Date(item.endAt) : null,
                 hasTime: item.hasTime !== false,
                 repeat: item.repeat || null,
                 notes: item.notes || null,
                 doneAt: item.doneAt ? new Date(item.doneAt) : null,
                 snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil) : null,
+                updatedAt: new Date(),
               })
               .returning({ id: upcomingItems.id });
 
@@ -342,15 +349,17 @@ export async function restoreDatabaseData(
           const [inserted] = await tx
             .insert(upcomingItems)
             .values({
+              uuid: (item as any).uuid || crypto.randomUUID(),
               title: item.title,
               type: item.type,
-              dueAt: new Date(item.dueAt),
+              dueAt: item.dueAt ? new Date(item.dueAt) : null,
               endAt: item.endAt ? new Date(item.endAt) : null,
               hasTime: item.hasTime !== false,
               repeat: item.repeat || null,
               notes: item.notes || null,
               doneAt: item.doneAt ? new Date(item.doneAt) : null,
               snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil) : null,
+              updatedAt: new Date(),
             })
             .returning({ id: upcomingItems.id });
 
@@ -365,9 +374,11 @@ export async function restoreDatabaseData(
         await tx
           .insert(upcomingCompletions)
           .values({
+            uuid: (comp as any).uuid || crypto.randomUUID(),
             itemId: mappedUpcomingId,
             occurrenceDate: comp.occurrenceDate,
             completedAt: new Date(comp.completedAt),
+            updatedAt: new Date(),
           })
           .onConflictDoNothing();
       }
@@ -391,11 +402,13 @@ export async function restoreDatabaseData(
             .insert(settings)
             .values({
               key,
+              uuid: crypto.randomUUID(),
               value: val,
+              updatedAt: new Date(),
             })
             .onConflictDoUpdate({
               target: settings.key,
-              set: { value: val },
+              set: { value: val, updatedAt: new Date() },
             });
         }
       }

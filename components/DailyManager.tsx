@@ -15,6 +15,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { formatTimeDisplay } from "@/lib/date";
+import { localDb } from "@/lib/db-local";
+import { syncEngine } from "@/lib/sync";
 
 export default function DailyManager({ initialItems }: { initialItems: Item[] }) {
   const [itemsList, setItemsList] = useState<Item[]>(initialItems);
@@ -57,13 +59,11 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
 
     setIsSaving(true);
     try {
+      const nowIso = new Date().toISOString();
+      const finalTarget = type === "checklist" ? 1 : targetCount;
+      const finalReminder = reminderTime ? `${reminderTime}:00` : null;
+
       if (editingItem) {
-        await updateItem(editingItem.id, {
-          name,
-          type,
-          targetCount: type === "checklist" ? 1 : targetCount,
-          reminderTime: reminderTime ? `${reminderTime}:00` : null,
-        });
         setItemsList((prev) =>
           prev.map((i) =>
             i.id === editingItem.id
@@ -71,20 +71,103 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
                   ...i,
                   name,
                   type,
-                  targetCount: type === "checklist" ? 1 : targetCount,
-                  reminderTime: reminderTime ? `${reminderTime}:00` : null,
+                  targetCount: finalTarget,
+                  reminderTime: finalReminder,
+                  updatedAt: new Date(),
                 }
               : i
           )
         );
+
+        if (localDb) {
+          try {
+            await localDb.items.update(editingItem.uuid, {
+              name,
+              type,
+              targetCount: finalTarget,
+              reminderTime: finalReminder,
+              updatedAt: nowIso,
+            });
+          } catch {}
+        }
+        if (syncEngine) {
+          syncEngine.queueLocalWrite("items", "update", {
+            uuid: editingItem.uuid,
+            name,
+            type,
+            targetCount: finalTarget,
+            reminderTime: finalReminder,
+            updatedAt: nowIso,
+          });
+        }
+
+        try {
+          await updateItem(editingItem.id, {
+            name,
+            type,
+            targetCount: finalTarget,
+            reminderTime: finalReminder,
+          });
+        } catch {}
       } else {
-        await createItem({
+        const itemUuid = crypto.randomUUID();
+        const fakeId = Date.now();
+        const newItem: Item = {
+          id: fakeId,
+          uuid: itemUuid,
           name,
           type,
-          targetCount: type === "checklist" ? 1 : targetCount,
-          reminderTime: reminderTime ? `${reminderTime}:00` : null,
-        });
-        window.location.reload();
+          targetCount: finalTarget,
+          reminderTime: finalReminder,
+          sortOrder: itemsList.length,
+          active: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        };
+
+        setItemsList((prev) => [...prev, newItem]);
+
+        if (localDb) {
+          try {
+            await localDb.items.put({
+              id: fakeId,
+              uuid: itemUuid,
+              name,
+              type,
+              targetCount: finalTarget,
+              reminderTime: finalReminder,
+              sortOrder: itemsList.length,
+              active: true,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+              deletedAt: null,
+            });
+          } catch {}
+        }
+        if (syncEngine) {
+          syncEngine.queueLocalWrite("items", "insert", {
+            uuid: itemUuid,
+            name,
+            type,
+            targetCount: finalTarget,
+            reminderTime: finalReminder,
+            sortOrder: itemsList.length,
+            active: true,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            deletedAt: null,
+          });
+        }
+
+        try {
+          await createItem({
+            name,
+            type,
+            targetCount: finalTarget,
+            reminderTime: finalReminder,
+          });
+        } catch {}
       }
       setIsModalOpen(false);
     } finally {
@@ -94,17 +177,60 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Delete this item? Its history will also be removed")) return;
+    const targetItem = itemsList.find((i) => i.id === id);
     setItemsList((prev) => prev.filter((i) => i.id !== id));
     if (expandedId === id) setExpandedId(null);
-    await deleteItem(id);
+
+    const nowIso = new Date().toISOString();
+    if (targetItem?.uuid) {
+      if (localDb) {
+        try {
+          await localDb.items.delete(targetItem.uuid);
+        } catch {}
+      }
+      if (syncEngine) {
+        syncEngine.queueLocalWrite("items", "delete", {
+          uuid: targetItem.uuid,
+          deletedAt: nowIso,
+          updatedAt: nowIso,
+        });
+      }
+    }
+
+    try {
+      await deleteItem(id);
+    } catch {}
   };
 
   const handleToggleActive = async (item: Item) => {
     const nextActive = !item.active;
+    const nowIso = new Date().toISOString();
+
     setItemsList((prev) =>
       prev.map((i) => (i.id === item.id ? { ...i, active: nextActive } : i))
     );
-    await updateItem(item.id, { active: nextActive });
+
+    if (item.uuid) {
+      if (localDb) {
+        try {
+          await localDb.items.update(item.uuid, {
+            active: nextActive,
+            updatedAt: nowIso,
+          });
+        } catch {}
+      }
+      if (syncEngine) {
+        syncEngine.queueLocalWrite("items", "update", {
+          uuid: item.uuid,
+          active: nextActive,
+          updatedAt: nowIso,
+        });
+      }
+    }
+
+    try {
+      await updateItem(item.id, { active: nextActive });
+    } catch {}
   };
 
   const handleMove = async (index: number, direction: "up" | "down") => {
@@ -130,10 +256,10 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
           <button
             type="button"
             onClick={openAddModal}
-            className="shrink-0 h-10 w-[134px] px-4 rounded-lg bg-[#4FA3FF] hover:bg-[#3fa0ff] text-[#08080A] font-medium text-xs whitespace-nowrap active:scale-[0.98] transition-colors flex items-center justify-center gap-1.5"
+            className="shrink-0 h-10 w-[134px] px-4 rounded-lg bg-[#4FA3FF] hover:bg-[#3fa0ff] text-[#08080A] font-medium text-xs whitespace-nowrap active:scale-[0.98] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
-            <span>+ New item</span>
+            <span>New item</span>
           </button>
         </div>
         <p className="text-xs text-[#8A92A3] max-w-xs sm:max-w-md leading-relaxed">

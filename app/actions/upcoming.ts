@@ -15,15 +15,16 @@ import {
 import { isUserAuthenticated } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
-export type UpcomingType = "work" | "meeting" | "reminder" | "todo";
+export type UpcomingType = "meeting" | "reminder" | "todo";
 export type UpcomingRepeat = "daily" | "weekly" | "monthly" | null;
 export type TimeFilter = "all" | "today" | "this_week" | "later" | "done";
 
 export interface FormattedUpcomingItem {
   id: number;
+  uuid?: string;
   title: string;
   type: UpcomingType;
-  dueAt: string; // ISO
+  dueAt: string | null; // ISO or null
   endAt?: string | null;
   hasTime: boolean;
   repeat?: UpcomingRepeat;
@@ -33,7 +34,7 @@ export interface FormattedUpcomingItem {
   createdAt: string;
 
   // Computed display helpers
-  dateStr: string; // YYYY-MM-DD
+  dateStr: string | null; // YYYY-MM-DD or null
   relativeLabel: string;
   timeDisplay: string;
   isOverdue: boolean;
@@ -51,6 +52,7 @@ export interface UpcomingGroupedData {
   tomorrow: FormattedUpcomingItem[];
   thisWeek: FormattedUpcomingItem[];
   later: FormattedUpcomingItem[];
+  noDate: FormattedUpcomingItem[];
   done: FormattedUpcomingItem[];
   totalOverdueCount: number;
 }
@@ -63,10 +65,11 @@ export async function getUpcomingItems(
   const now = new Date();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // 1. Fetch active items (not done, or repeating items)
+  // 1. Fetch active items
   const allUpcoming = await db
     .select()
     .from(upcomingItems)
+    .where(isNull(upcomingItems.deletedAt))
     .orderBy(asc(upcomingItems.dueAt));
 
   // 2. Fetch completions from last 30 days for repeating items
@@ -78,7 +81,7 @@ export async function getUpcomingItems(
       completedAt: upcomingCompletions.completedAt,
     })
     .from(upcomingCompletions)
-    .where(gte(upcomingCompletions.completedAt, thirtyDaysAgo))
+    .where(and(gte(upcomingCompletions.completedAt, thirtyDaysAgo), isNull(upcomingCompletions.deletedAt)))
     .orderBy(desc(upcomingCompletions.completedAt));
 
   const itemsMap = new Map<number, UpcomingItem>();
@@ -86,7 +89,7 @@ export async function getUpcomingItems(
     itemsMap.set(item.id, item);
   }
 
-  // Calculate Overdue threshold: items due before start of today in Asia/Kolkata
+  // Calculate Overdue threshold
   const tomorrowStr = addDaysToDate(todayStr, 1);
   const endOfWeekStr = addDaysToDate(todayStr, 7);
 
@@ -95,6 +98,7 @@ export async function getUpcomingItems(
   const tomorrowList: FormattedUpcomingItem[] = [];
   const thisWeekList: FormattedUpcomingItem[] = [];
   const laterList: FormattedUpcomingItem[] = [];
+  const noDateList: FormattedUpcomingItem[] = [];
   const doneList: FormattedUpcomingItem[] = [];
 
   // Find nearest upcoming meeting today
@@ -104,6 +108,7 @@ export async function getUpcomingItems(
   for (const item of allUpcoming) {
     if (item.doneAt) continue;
     if (item.snoozedUntil && new Date(item.snoozedUntil).getTime() > nowTime) continue;
+    if (!item.dueAt) continue;
 
     const itemDateStr = getDateStringInTz(item.dueAt);
     if (itemDateStr === todayStr && item.type === "meeting" && item.hasTime) {
@@ -125,10 +130,17 @@ export async function getUpcomingItems(
   let totalOverdue = 0;
 
   for (const item of allUpcoming) {
+    const normType = (item.type as string) === "work" ? "todo" : (item.type as UpcomingType);
+
+    // Apply type filter if user selected any types
+    if (typeFilters.length > 0 && !typeFilters.includes(normType)) {
+      continue;
+    }
+
     // If completed non-repeating item
     if (item.doneAt) {
       if (new Date(item.doneAt).getTime() >= thirtyDaysAgo.getTime()) {
-        const dateStr = getDateStringInTz(item.dueAt);
+        const dateStr = item.dueAt ? getDateStringInTz(item.dueAt) : null;
         doneList.push(formatItem(item, dateStr, todayStr, true));
       }
       continue;
@@ -139,16 +151,18 @@ export async function getUpcomingItems(
       continue;
     }
 
+    // Items with NO DATE
+    if (!item.dueAt) {
+      const formatted = formatItem(item, null, todayStr, false);
+      noDateList.push(formatted);
+      continue;
+    }
+
     const itemDateStr = getDateStringInTz(item.dueAt);
     const isPast = itemDateStr < todayStr;
 
     if (isPast) {
       totalOverdue++;
-    }
-
-    // Apply type filter if user selected any types
-    if (typeFilters.length > 0 && !typeFilters.includes(item.type as UpcomingType)) {
-      continue;
     }
 
     // Meeting label helper
@@ -184,7 +198,8 @@ export async function getUpcomingItems(
     const parent = itemsMap.get(comp.itemId);
     if (!parent) continue;
 
-    if (typeFilters.length > 0 && !typeFilters.includes(parent.type as UpcomingType)) {
+    const normParentType = (parent.type as string) === "work" ? "todo" : (parent.type as UpcomingType);
+    if (typeFilters.length > 0 && !typeFilters.includes(normParentType)) {
       continue;
     }
 
@@ -197,12 +212,18 @@ export async function getUpcomingItems(
     });
   }
 
+  // Sort noDateList newest first
+  noDateList.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
   return {
     overdue: overdueList,
     today: todayList,
     tomorrow: tomorrowList,
     thisWeek: thisWeekList,
     later: laterList,
+    noDate: noDateList,
     done: doneList,
     totalOverdueCount: totalOverdue,
   };
@@ -210,34 +231,45 @@ export async function getUpcomingItems(
 
 function formatItem(
   item: UpcomingItem,
-  dateStr: string,
+  dateStr: string | null,
   todayStr: string,
   isDone: boolean,
   nearestMeetingLabel?: string | null
 ): FormattedUpcomingItem {
   let timeDisplay = "";
-  if (item.hasTime) {
+  if (item.dueAt && item.hasTime) {
     if (item.type === "meeting") {
       timeDisplay = formatMeetingTimeRange(item.dueAt, item.endAt);
     } else {
       timeDisplay = formatDateTimeInTz(item.dueAt);
     }
-  } else {
+  } else if (item.dueAt) {
     timeDisplay = "All day";
+  } else {
+    timeDisplay = "";
   }
 
-  const relativeLabel = isDone ? "Completed" : getRelativeDateLabel(dateStr, todayStr);
-  const isOverdue = !isDone && dateStr < todayStr;
+  const isOverdue = !isDone && dateStr !== null && dateStr < todayStr;
   const isToday = dateStr === todayStr;
+
+  let relativeLabel = "No date";
+  if (isDone) {
+    relativeLabel = "Completed";
+  } else if (dateStr) {
+    relativeLabel = getRelativeDateLabel(dateStr, todayStr);
+  }
+
+  const normType = (item.type as string) === "work" ? "todo" : (item.type as UpcomingType);
 
   return {
     id: item.id,
+    uuid: item.uuid,
     title: item.title,
-    type: item.type as UpcomingType,
-    dueAt: new Date(item.dueAt).toISOString(),
+    type: normType,
+    dueAt: item.dueAt ? new Date(item.dueAt).toISOString() : null,
     endAt: item.endAt ? new Date(item.endAt).toISOString() : null,
-    hasTime: item.hasTime,
-    repeat: (item.repeat as UpcomingRepeat) || null,
+    hasTime: item.dueAt ? item.hasTime : false,
+    repeat: item.dueAt ? (item.repeat as UpcomingRepeat) || null : null,
     notes: item.notes,
     doneAt: item.doneAt ? new Date(item.doneAt).toISOString() : null,
     snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil).toISOString() : null,
@@ -255,7 +287,7 @@ function formatItem(
 export async function createUpcomingItem(data: {
   title: string;
   type: UpcomingType;
-  dueAt: string; // ISO string
+  dueAt: string | null; // ISO string or null
   endAt?: string | null;
   hasTime: boolean;
   repeat?: UpcomingRepeat;
@@ -267,13 +299,15 @@ export async function createUpcomingItem(data: {
   const [inserted] = await db
     .insert(upcomingItems)
     .values({
+      uuid: crypto.randomUUID(),
       title: data.title.trim(),
       type: data.type,
-      dueAt: new Date(data.dueAt),
-      endAt: data.endAt ? new Date(data.endAt) : null,
-      hasTime: data.hasTime,
-      repeat: data.repeat || null,
+      dueAt: data.dueAt ? new Date(data.dueAt) : null,
+      endAt: data.dueAt && data.endAt ? new Date(data.endAt) : null,
+      hasTime: data.dueAt ? data.hasTime : false,
+      repeat: data.dueAt ? data.repeat || null : null,
       notes: data.notes?.trim() || null,
+      updatedAt: new Date(),
     })
     .returning();
 
@@ -287,7 +321,7 @@ export async function updateUpcomingItem(
   data: {
     title?: string;
     type?: UpcomingType;
-    dueAt?: string;
+    dueAt?: string | null;
     endAt?: string | null;
     hasTime?: boolean;
     repeat?: UpcomingRepeat;
@@ -302,11 +336,14 @@ export async function updateUpcomingItem(
     .set({
       ...(data.title !== undefined && { title: data.title.trim() }),
       ...(data.type !== undefined && { type: data.type }),
-      ...(data.dueAt !== undefined && { dueAt: new Date(data.dueAt) }),
-      ...(data.endAt !== undefined && { endAt: data.endAt ? new Date(data.endAt) : null }),
-      ...(data.hasTime !== undefined && { hasTime: data.hasTime }),
-      ...(data.repeat !== undefined && { repeat: data.repeat || null }),
+      ...(data.dueAt !== undefined && {
+        dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        endAt: data.dueAt && data.endAt ? new Date(data.endAt) : null,
+        hasTime: data.dueAt ? data.hasTime ?? false : false,
+        repeat: data.dueAt ? data.repeat ?? null : null,
+      }),
       ...(data.notes !== undefined && { notes: data.notes?.trim() || null }),
+      updatedAt: new Date(),
     })
     .where(eq(upcomingItems.id, id));
 
@@ -329,26 +366,29 @@ export async function toggleUpcomingDone(id: number) {
 
   const todayStr = getTodayDateString();
 
-  // 1. Repeating Item
-  if (item.repeat) {
+  // 1. Repeating Item (only if dueAt exists)
+  if (item.repeat && item.dueAt) {
     const currentOccurrenceDate = getDateStringInTz(item.dueAt);
 
     // Record completion in upcoming_completions
     await db
       .insert(upcomingCompletions)
       .values({
+        uuid: crypto.randomUUID(),
         itemId: item.id,
         occurrenceDate: currentOccurrenceDate,
         completedAt: new Date(),
+        updatedAt: new Date(),
       })
       .onConflictDoNothing();
 
-    // Advance due_at to next occurrence
-    const nextDue = computeNextRecurrence(item.dueAt, item.repeat);
+    // Advance to next occurrence
+    const nextDue = computeNextRecurrence(item.dueAt, item.repeat as any);
+
     let nextEnd: Date | null = null;
     if (item.endAt) {
-      const diff = new Date(item.endAt).getTime() - new Date(item.dueAt).getTime();
-      nextEnd = new Date(nextDue.getTime() + diff);
+      const durationMs = new Date(item.endAt).getTime() - new Date(item.dueAt).getTime();
+      nextEnd = new Date(nextDue.getTime() + durationMs);
     }
 
     await db
@@ -358,27 +398,28 @@ export async function toggleUpcomingDone(id: number) {
         endAt: nextEnd,
         snoozedUntil: null,
       })
-      .where(eq(upcomingItems.id, item.id));
+      .where(eq(upcomingItems.id, id));
 
     revalidatePath("/upcoming");
     revalidatePath("/today");
-    return { success: true, repeating: true, nextDue: nextDue.toISOString() };
+    revalidatePath("/report");
+    return { success: true, repeating: true, nextDate: nextDue.toISOString() };
   }
 
-  // 2. Non-repeating Item
-  const newDoneAt = item.doneAt ? null : new Date();
-
+  // 2. Non-repeating Item (toggle doneAt)
+  const isDone = !!item.doneAt;
   await db
     .update(upcomingItems)
     .set({
-      doneAt: newDoneAt,
+      doneAt: isDone ? null : new Date(),
       snoozedUntil: null,
     })
     .where(eq(upcomingItems.id, id));
 
   revalidatePath("/upcoming");
   revalidatePath("/today");
-  return { success: true, repeating: false, done: !!newDoneAt };
+  revalidatePath("/report");
+  return { success: true, repeating: false, done: !isDone };
 }
 
 export async function undoUpcomingCompletion(itemId: number, completionId?: number) {
@@ -386,70 +427,61 @@ export async function undoUpcomingCompletion(itemId: number, completionId?: numb
   if (!auth) throw new Error("Unauthorized");
 
   if (completionId) {
-    // Delete occurrence from completions
-    const [comp] = await db
-      .select()
-      .from(upcomingCompletions)
-      .where(eq(upcomingCompletions.id, completionId))
-      .limit(1);
-
-    if (comp) {
-      await db.delete(upcomingCompletions).where(eq(upcomingCompletions.id, completionId));
-      // Optionally move item's due_at back to that occurrence date
-      const [item] = await db.select().from(upcomingItems).where(eq(upcomingItems.id, comp.itemId)).limit(1);
-      if (item && item.repeat) {
-        const timePart = formatDateTimeInTz(item.dueAt);
-        const [y, m, d] = comp.occurrenceDate.split("-").map(Number);
-        const rolledBackDate = new Date(item.dueAt);
-        rolledBackDate.setFullYear(y, m - 1, d);
-        await db.update(upcomingItems).set({ dueAt: rolledBackDate }).where(eq(upcomingItems.id, item.id));
-      }
-    }
+    await db.delete(upcomingCompletions).where(eq(upcomingCompletions.id, completionId));
   } else {
-    // Unmark doneAt on non-repeating item
-    await db.update(upcomingItems).set({ doneAt: null }).where(eq(upcomingItems.id, itemId));
+    await db
+      .update(upcomingItems)
+      .set({ doneAt: null })
+      .where(eq(upcomingItems.id, itemId));
   }
 
   revalidatePath("/upcoming");
   revalidatePath("/today");
+  revalidatePath("/report");
   return { success: true };
 }
 
-export async function snoozeUpcomingItem(id: number, option: "1hour" | "tomorrow" | "next_week") {
+export async function snoozeUpcomingItem(
+  id: number,
+  duration: "1h" | "tomorrow" | "next_week"
+) {
   const auth = await isUserAuthenticated();
   if (!auth) throw new Error("Unauthorized");
 
   const now = new Date();
-  let snoozeUntil = new Date();
+  let snoozeTime = new Date();
 
-  if (option === "1hour") {
-    snoozeUntil.setHours(snoozeUntil.getHours() + 1);
-  } else if (option === "tomorrow") {
-    snoozeUntil.setDate(snoozeUntil.getDate() + 1);
-    snoozeUntil.setHours(9, 0, 0, 0); // 9:00 AM tomorrow
-  } else if (option === "next_week") {
-    snoozeUntil.setDate(snoozeUntil.getDate() + 7);
-    snoozeUntil.setHours(9, 0, 0, 0); // 9:00 AM next week
+  if (duration === "1h") {
+    snoozeTime.setHours(snoozeTime.getHours() + 1);
+  } else if (duration === "tomorrow") {
+    snoozeTime.setDate(snoozeTime.getDate() + 1);
+    snoozeTime.setHours(9, 0, 0, 0);
+  } else if (duration === "next_week") {
+    snoozeTime.setDate(snoozeTime.getDate() + 7);
+    snoozeTime.setHours(9, 0, 0, 0);
   }
 
   await db
     .update(upcomingItems)
-    .set({ snoozedUntil: snoozeUntil })
+    .set({ snoozedUntil: snoozeTime })
     .where(eq(upcomingItems.id, id));
 
   revalidatePath("/upcoming");
   revalidatePath("/today");
-  return { success: true, snoozedUntil: snoozeUntil.toISOString() };
+  return { success: true, snoozedUntil: snoozeTime.toISOString() };
 }
 
 export async function deleteUpcomingItem(id: number) {
   const auth = await isUserAuthenticated();
   if (!auth) throw new Error("Unauthorized");
 
-  await db.delete(upcomingItems).where(eq(upcomingItems.id, id));
+  await db
+    .update(upcomingItems)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(upcomingItems.id, id));
 
   revalidatePath("/upcoming");
   revalidatePath("/today");
+  revalidatePath("/report");
   return { success: true };
 }
-

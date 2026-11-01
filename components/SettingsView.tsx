@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { updateTimezoneSetting, changePinAction } from "@/app/actions/settings";
+import { changePinAction } from "@/app/actions/settings";
 import { previewBackup, executeRestore, type BackupPreviewResult } from "@/app/actions/backup";
 import { logoutAction } from "@/app/actions/auth";
 import {
-  Globe,
-  Palette,
   KeyRound,
   Eye,
   EyeOff,
@@ -20,32 +18,18 @@ import {
   AlertTriangle,
   LogOut,
   RefreshCw,
+  Cloud,
+  CloudOff,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { syncEngine, type SyncStatus } from "@/lib/sync";
 
 interface SettingsViewProps {
   initialSettings: Record<string, any>;
 }
 
-const COMMON_TIMEZONES = [
-  "Asia/Kolkata",
-  "UTC",
-  "America/New_York",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Berlin",
-  "Asia/Dubai",
-  "Asia/Singapore",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-];
-
 export default function SettingsView({ initialSettings }: SettingsViewProps) {
   const router = useRouter();
-  const currentTz = initialSettings.timezone?.tz || "Asia/Kolkata";
-  const [selectedTz, setSelectedTz] = useState(currentTz);
-  const [tzMessage, setTzMessage] = useState<string | null>(null);
-  const [isUpdatingTz, setIsUpdatingTz] = useState(false);
 
   // Change PIN state
   const [currentPin, setCurrentPin] = useState("");
@@ -78,28 +62,40 @@ export default function SettingsView({ initialSettings }: SettingsViewProps) {
   const [replaceConfirmText, setReplaceConfirmText] = useState("");
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // Sync status state
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    state: "idle",
+    pendingCount: 0,
+    lastSyncedAt: null,
+    humanStatus: "Synced just now",
+  });
+
+  useEffect(() => {
+    if (syncEngine) {
+      const unsubscribe = syncEngine.subscribe((st: SyncStatus) => setSyncStatus(st));
+      return unsubscribe;
+    }
+  }, []);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewModalRef = useRef<HTMLDivElement | null>(null);
 
-  // Format date helper
-  const formatDateTime = useCallback(
-    (isoString: string) => {
-      try {
-        const d = new Date(isoString);
-        return new Intl.DateTimeFormat("en-US", {
-          timeZone: selectedTz,
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        }).format(d);
-      } catch {
-        return isoString;
-      }
-    },
-    [selectedTz]
-  );
+  // Format date helper (strictly in Asia/Kolkata)
+  const formatDateTime = useCallback((isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(d);
+    } catch {
+      return isoString;
+    }
+  }, []);
 
   // Calculate days since last backup
   const daysSinceBackup = lastBackupDate
@@ -123,19 +119,7 @@ export default function SettingsView({ initialSettings }: SettingsViewProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isPreviewOpen, isRestoring, isShareModalOpen]);
 
-  // 1. Timezone Handler
-  const handleSaveTimezone = async () => {
-    setIsUpdatingTz(true);
-    try {
-      await updateTimezoneSetting(selectedTz);
-      setTzMessage("Timezone successfully saved!");
-      setTimeout(() => setTzMessage(null), 3000);
-    } finally {
-      setIsUpdatingTz(false);
-    }
-  };
-
-  // 2. PIN Change Handler
+  // 1. PIN Change Handler
   const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinMessage(null);
@@ -471,51 +455,7 @@ export default function SettingsView({ initialSettings }: SettingsViewProps) {
         </form>
       </div>
 
-      {/* 2. Timezone Setting */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-[#111216] border border-white/10 shadow-xl space-y-4">
-        <div className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-[#4FA3FF]" />
-          <h2 className="font-heading font-bold text-lg uppercase tracking-wider text-white">
-            Timezone Configuration
-          </h2>
-        </div>
-        <p className="text-xs text-[#8A92A3]">
-          All daily logs and &quot;today&quot; metrics are strictly calculated in this timezone,
-          ensuring UTC server drift on Vercel never resets your day early.
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select
-            value={selectedTz}
-            onChange={(e) => setSelectedTz(e.target.value)}
-            className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#1A1C22] border border-white/10 text-white text-sm focus:outline-none focus:border-[#4FA3FF]"
-          >
-            {COMMON_TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz} {tz === "Asia/Kolkata" ? "(Default)" : ""}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={handleSaveTimezone}
-            disabled={isUpdatingTz}
-            className="px-5 py-2.5 rounded-xl bg-[#4FA3FF] hover:bg-[#4FA3FF]/90 text-white font-heading font-bold text-xs uppercase tracking-wider transition-colors min-h-[44px] cursor-pointer disabled:opacity-50"
-          >
-            {isUpdatingTz ? "Saving..." : "Save Timezone"}
-          </button>
-        </div>
-
-        {tzMessage && (
-          <div className="flex items-center gap-2 text-xs text-[#4FA3FF]">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{tzMessage}</span>
-          </div>
-        )}
-      </div>
-
-      {/* 3. Backup and Restore (Standardized Card) */}
+      {/* 2. Backup and restore (Standardized Card) */}
       <div className="p-5 sm:p-6 rounded-2xl bg-[#111216] border border-white/10 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -615,42 +555,64 @@ export default function SettingsView({ initialSettings }: SettingsViewProps) {
         )}
       </div>
 
-      {/* 4. BMW M Theme Specification */}
+      {/* 3. Sync status */}
       <div className="p-5 sm:p-6 rounded-2xl bg-[#111216] border border-white/10 shadow-xl space-y-4">
-        <div className="flex items-center gap-2">
-          <Palette className="w-5 h-5 text-[#E4101E]" />
-          <h2 className="font-heading font-bold text-lg uppercase tracking-wider text-white">
-            BMW M Color Theme
-          </h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {syncStatus.state === "offline" ? (
+              <CloudOff className="w-5 h-5 text-[#E4101E]" />
+            ) : (
+              <Cloud className="w-5 h-5 text-[#4FA3FF]" />
+            )}
+            <h2 className="font-heading font-bold text-lg uppercase tracking-wider text-white">
+              Sync status
+            </h2>
+          </div>
+
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-heading font-bold uppercase tracking-wider ${
+              syncStatus.state === "offline"
+                ? "bg-[#E4101E]/15 text-[#E4101E] border border-[#E4101E]/30"
+                : syncStatus.state === "syncing"
+                ? "bg-[#4FA3FF]/15 text-[#4FA3FF] border border-[#4FA3FF]/30"
+                : "bg-white/5 text-[#8A92A3] border border-white/10"
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                syncStatus.state === "offline"
+                  ? "bg-[#E4101E]"
+                  : syncStatus.state === "syncing"
+                  ? "bg-[#4FA3FF] animate-pulse"
+                  : "bg-[#4FA3FF]"
+              }`}
+            />
+            {syncStatus.humanStatus}
+          </span>
         </div>
+
         <p className="text-xs text-[#8A92A3]">
-          Pure dark mode inspired by the iconic BMW M Motorsport tri-color livery on carbon black.
-          High contrast, flat surfaces, 1px borders, subtle diagonal accents.
+          Changes save immediately on your device and sync to the cloud database when online.
         </p>
 
-        {/* 3 Stripe Showcase Bar */}
-        <div className="h-4 rounded-xl m-stripe-diagonal -skew-x-12 shadow-md my-2" />
-
-        <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
-          <div className="p-2.5 rounded-xl bg-[#1A1C22] border border-white/5">
-            <span className="w-3 h-3 rounded-full bg-[#4FA3FF] inline-block mb-1" />
-            <p className="font-heading font-bold text-white uppercase">M Light Blue</p>
-            <p className="text-[10px] text-[#8A92A3]">#4FA3FF (Checklist)</p>
-          </div>
-          <div className="p-2.5 rounded-xl bg-[#1A1C22] border border-white/5">
-            <span className="w-3 h-3 rounded-full bg-[#3D7EFF] inline-block mb-1" />
-            <p className="font-heading font-bold text-white uppercase">M Dark Blue</p>
-            <p className="text-[10px] text-[#8A92A3]">#3D7EFF (Upcoming)</p>
-          </div>
-          <div className="p-2.5 rounded-xl bg-[#1A1C22] border border-white/5">
-            <span className="w-3 h-3 rounded-full bg-[#E4101E] inline-block mb-1" />
-            <p className="font-heading font-bold text-white uppercase">M Red</p>
-            <p className="text-[10px] text-[#8A92A3]">#E4101E (Diet &amp; Streaks)</p>
-          </div>
+        <div className="flex items-center justify-between pt-1">
+          <button
+            type="button"
+            onClick={() => syncEngine?.sync()}
+            disabled={syncStatus.state === "syncing"}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1A1C22] hover:bg-white/10 border border-white/10 text-white font-heading font-bold text-xs uppercase tracking-wider transition-colors min-h-[40px] cursor-pointer disabled:opacity-40"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 text-[#4FA3FF] ${
+                syncStatus.state === "syncing" ? "animate-spin" : ""
+              }`}
+            />
+            <span>{syncStatus.state === "syncing" ? "Syncing..." : "Sync now"}</span>
+          </button>
         </div>
       </div>
 
-      {/* 5. Session / Sign out */}
+      {/* 4. Session / Sign out */}
       <div className="pt-2">
         <form action={logoutAction}>
           <button

@@ -8,6 +8,8 @@ import InAppReminderBanner from "@/components/InAppReminderBanner";
 import { setItemCount, toggleWeeklyLog, toggleFutureDone, TodayItemData, TodayWeeklyTaskData, TodayFutureReminderData } from "@/app/actions/today";
 import { formatDateDisplay, formatTimeDisplay } from "@/lib/date";
 import { Bell, Calendar, Sparkles, CheckCircle2, Clock } from "lucide-react";
+import { localDb } from "@/lib/db-local";
+import { syncEngine } from "@/lib/sync";
 
 interface TodayDashboardProps {
   initialDate: string;
@@ -48,7 +50,42 @@ export default function TodayDashboard({
         prev.map((item) => (item.id === id ? { ...item, count, done: isDone } : item))
       );
     }
-    await setItemCount(id, count, targetCount, initialDate);
+
+    const foundItem = (type === "checklist" ? checklist : diet).find((i) => i.id === id);
+    const logUuid = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+
+    if (localDb) {
+      try {
+        await localDb.dailyLogs.put({
+          uuid: logUuid,
+          itemId: id,
+          itemUuid: foundItem?.uuid || "",
+          logDate: initialDate,
+          count,
+          done: isDone,
+          updatedAt: nowIso,
+        });
+      } catch {}
+    }
+
+    if (syncEngine) {
+      syncEngine.queueLocalWrite("daily_logs", "insert", {
+        uuid: logUuid,
+        itemId: id,
+        itemUuid: foundItem?.uuid || "",
+        logDate: initialDate,
+        count,
+        done: isDone,
+        updatedAt: nowIso,
+      });
+    }
+
+    try {
+      await setItemCount(id, count, targetCount, initialDate);
+    } catch {
+      // Offline mode: queued in outbox
+    }
   };
 
   // Toggle weekly task
@@ -56,7 +93,9 @@ export default function TodayDashboard({
     setWeekly((prev) =>
       prev.map((w) => (w.id === taskId ? { ...w, done: !w.done } : w))
     );
-    await toggleWeeklyLog(taskId, initialDate);
+    try {
+      await toggleWeeklyLog(taskId, initialDate);
+    } catch {}
   };
 
   // Toggle future reminder
@@ -64,7 +103,33 @@ export default function TodayDashboard({
     setFutureReminders((prev) =>
       prev.map((r) => (r.id === id ? { ...r, doneAt: r.doneAt ? null : new Date() } : r))
     );
-    await toggleFutureDone(id);
+
+    const found = futureReminders.find((r) => r.id === id);
+    const isCurrentlyDone = !!found?.doneAt;
+    const nowIso = new Date().toISOString();
+
+    if (localDb) {
+      try {
+        const localUp = await localDb.upcomingItems.where("id").equals(id).first();
+        if (localUp) {
+          await localDb.upcomingItems.update(localUp.uuid, {
+            doneAt: isCurrentlyDone ? null : nowIso,
+            updatedAt: nowIso,
+          });
+          syncEngine?.queueLocalWrite("upcoming_items", "update", {
+            uuid: localUp.uuid,
+            doneAt: isCurrentlyDone ? null : nowIso,
+            updatedAt: nowIso,
+          });
+        }
+      } catch {}
+    }
+
+    try {
+      await toggleFutureDone(id);
+    } catch {
+      // Offline mode: queued in outbox
+    }
   };
 
   // Build active in-app notices for banner

@@ -15,6 +15,7 @@ import {
 // Daily checklist + diet items
 export const items = pgTable("items", {
   id: serial("id").primaryKey(),
+  uuid: text("uuid").notNull().unique(),
   name: text("name").notNull(),
   type: text("type", { enum: ["checklist", "diet"] }).notNull(),
   targetCount: integer("target_count").notNull().default(1),
@@ -22,6 +23,8 @@ export const items = pgTable("items", {
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 // One row per item per day (upsert on tick)
@@ -29,13 +32,16 @@ export const dailyLogs = pgTable(
   "daily_logs",
   {
     id: serial("id").primaryKey(),
+    uuid: text("uuid").notNull().unique(),
     itemId: integer("item_id")
       .notNull()
       .references(() => items.id, { onDelete: "cascade" }),
+    itemUuid: text("item_uuid"),
     logDate: date("log_date").notNull(),
     count: integer("count").notNull().default(0),
     done: boolean("done").notNull().default(false),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => ({
     itemDateUnique: unique().on(table.itemId, table.logDate),
@@ -43,16 +49,17 @@ export const dailyLogs = pgTable(
   })
 );
 
-// Unified Upcoming Items (Work, Meetings, Reminders, Todos)
+// Unified Upcoming Items (Meetings, Reminders, Todos)
 export const upcomingItems = pgTable(
   "upcoming_items",
   {
     id: serial("id").primaryKey(),
+    uuid: text("uuid").notNull().unique(),
     title: text("title").notNull(),
-    type: text("type", { enum: ["work", "meeting", "reminder", "todo"] })
+    type: text("type", { enum: ["meeting", "reminder", "todo"] })
       .notNull()
       .default("todo"),
-    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
     endAt: timestamp("end_at", { withTimezone: true }),
     hasTime: boolean("has_time").notNull().default(true),
     repeat: text("repeat", { enum: ["daily", "weekly", "monthly"] }),
@@ -62,6 +69,10 @@ export const upcomingItems = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => ({
     dueAtIdx: index("upcoming_items_due_at_idx").on(table.dueAt),
@@ -74,13 +85,19 @@ export const upcomingCompletions = pgTable(
   "upcoming_completions",
   {
     id: serial("id").primaryKey(),
+    uuid: text("uuid").notNull().unique(),
     itemId: integer("item_id")
       .notNull()
       .references(() => upcomingItems.id, { onDelete: "cascade" }),
+    itemUuid: text("item_uuid"),
     occurrenceDate: date("occurrence_date").notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => ({
     itemOccurrenceUnique: unique().on(table.itemId, table.occurrenceDate),
@@ -137,7 +154,10 @@ export const futureReminders = pgTable(
 // Key-value settings table
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
+  uuid: text("uuid").notNull().unique(),
   value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export type Item = typeof items.$inferSelect;

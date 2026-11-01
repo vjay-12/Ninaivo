@@ -23,10 +23,14 @@ export const BackupDailyLogSchema = z.object({
 export const BackupUpcomingItemSchema = z.object({
   id: z.number().int().optional(),
   title: z.string().min(1, "Upcoming item title cannot be empty"),
-  type: z.enum(["work", "meeting", "reminder", "todo"]).default("todo"),
+  type: z
+    .preprocess((val) => (val === "work" ? "todo" : val), z.enum(["meeting", "reminder", "todo"]))
+    .default("todo"),
   dueAt: z
     .union([z.string(), z.date()])
-    .refine((val) => !isNaN(new Date(val).getTime()), "Invalid dueAt timestamp"),
+    .nullable()
+    .optional()
+    .refine((val) => !val || !isNaN(new Date(val).getTime()), "Invalid dueAt timestamp"),
   endAt: z
     .union([z.string(), z.date()])
     .nullable()
@@ -77,14 +81,16 @@ export const BackupPayloadSchema = z.object({
       settings: z.number().int().nonnegative().optional(),
     })
     .optional(),
-  data: z.object({
-    items: z.array(BackupItemSchema).default([]),
-    dailyLogs: z.array(BackupDailyLogSchema).default([]),
-    upcoming: z.array(BackupUpcomingItemSchema).default([]),
-    completions: z.array(BackupUpcomingCompletionSchema).default([]),
-    settings: BackupSettingsSchema.default({}),
-  }),
-});
+  data: z
+    .object({
+      items: z.array(BackupItemSchema).default([]),
+      dailyLogs: z.array(BackupDailyLogSchema).default([]),
+      upcoming: z.array(BackupUpcomingItemSchema).default([]),
+      completions: z.array(BackupUpcomingCompletionSchema).default([]),
+      settings: BackupSettingsSchema.default({}),
+    })
+    .passthrough(),
+}).passthrough();
 
 export type BackupPayload = z.infer<typeof BackupPayloadSchema>;
 export type BackupItem = z.infer<typeof BackupItemSchema>;

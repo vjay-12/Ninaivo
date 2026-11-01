@@ -1,4 +1,4 @@
-export const DEFAULT_TZ = process.env.TZ_DEFAULT || "Asia/Kolkata";
+export const DEFAULT_TZ = "Asia/Kolkata";
 
 /**
  * Returns today's date formatted as YYYY-MM-DD in the given timezone (defaults to Asia/Kolkata)
