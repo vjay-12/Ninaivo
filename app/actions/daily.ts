@@ -15,6 +15,7 @@ export async function getDailyItems() {
 }
 
 export async function createItem(data: {
+  uuid?: string;
   name: string;
   type: "checklist" | "diet";
   targetCount: number;
@@ -30,16 +31,30 @@ export async function createItem(data: {
     .where(isNull(items.deletedAt));
   const maxOrder = all.reduce((max, cur) => Math.max(max, cur.sortOrder), -1);
 
-  await db.insert(items).values({
-    uuid: crypto.randomUUID(),
-    name: data.name.trim(),
-    type: data.type,
-    targetCount: Math.max(1, data.targetCount || 1),
-    reminderTime: data.reminderTime || null,
-    sortOrder: maxOrder + 1,
-    active: true,
-    updatedAt: new Date(),
-  });
+  const itemUuid = data.uuid || crypto.randomUUID();
+
+  await db
+    .insert(items)
+    .values({
+      uuid: itemUuid,
+      name: data.name.trim(),
+      type: data.type,
+      targetCount: Math.max(1, data.targetCount || 1),
+      reminderTime: data.reminderTime || null,
+      sortOrder: maxOrder + 1,
+      active: true,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: items.uuid,
+      set: {
+        name: data.name.trim(),
+        type: data.type,
+        targetCount: Math.max(1, data.targetCount || 1),
+        reminderTime: data.reminderTime || null,
+        updatedAt: new Date(),
+      },
+    });
 
   revalidatePath("/daily");
   revalidatePath("/today");

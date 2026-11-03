@@ -6,7 +6,7 @@ import CheckRow from "@/components/CheckRow";
 import CounterPips from "@/components/CounterPips";
 import InAppReminderBanner from "@/components/InAppReminderBanner";
 import { setItemCount, toggleWeeklyLog, toggleFutureDone, TodayItemData, TodayWeeklyTaskData, TodayFutureReminderData } from "@/app/actions/today";
-import { formatDateDisplay, formatTimeDisplay } from "@/lib/date";
+import { formatDateDisplay, formatTimeDisplay, formatDateTimeInTz } from "@/lib/date";
 import { Bell, Calendar, Sparkles, CheckCircle2, Clock } from "lucide-react";
 import { localDb } from "@/lib/db-local";
 import { syncEngine } from "@/lib/sync";
@@ -399,7 +399,7 @@ export default function TodayDashboard({
 
                   <span className="text-xs text-[#E4101E] font-medium flex items-center gap-1">
                     <Bell className="w-3 h-3" />
-                    {new Date(reminder.dueAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {formatDateTimeInTz(reminder.dueAt)}
                   </span>
                 </div>
               );

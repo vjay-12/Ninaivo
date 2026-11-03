@@ -11,6 +11,7 @@ import {
   getRelativeDateLabel,
   formatDateTimeInTz,
   formatMeetingTimeRange,
+  getUpcomingDateInfo,
 } from "@/lib/date";
 import { isUserAuthenticated } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
@@ -37,6 +38,7 @@ export interface FormattedUpcomingItem {
   dateStr: string | null; // YYYY-MM-DD or null
   relativeLabel: string;
   timeDisplay: string;
+  detailDateDisplay: string;
   isOverdue: boolean;
   isToday: boolean;
   isDone: boolean;
@@ -137,31 +139,29 @@ export async function getUpcomingItems(
       continue;
     }
 
-    // If completed non-repeating item
-    if (item.doneAt) {
-      if (new Date(item.doneAt).getTime() >= thirtyDaysAgo.getTime()) {
-        const dateStr = item.dueAt ? getDateStringInTz(item.dueAt) : null;
-        doneList.push(formatItem(item, dateStr, todayStr, true));
-      }
+    const info = getUpcomingDateInfo(item, now);
+
+    // If snoozed into the future, hide from active lists
+    if (info.isSnoozed) {
       continue;
     }
 
-    // If snoozed into the future, hide from active lists
-    if (item.snoozedUntil && new Date(item.snoozedUntil).getTime() > nowTime) {
+    // If completed non-repeating item
+    if (item.doneAt) {
+      if (new Date(item.doneAt).getTime() >= thirtyDaysAgo.getTime()) {
+        doneList.push(formatItem(item, true, now));
+      }
       continue;
     }
 
     // Items with NO DATE
     if (!item.dueAt) {
-      const formatted = formatItem(item, null, todayStr, false);
+      const formatted = formatItem(item, false, now);
       noDateList.push(formatted);
       continue;
     }
 
-    const itemDateStr = getDateStringInTz(item.dueAt);
-    const isPast = itemDateStr < todayStr;
-
-    if (isPast) {
+    if (info.isOverdue) {
       totalOverdue++;
     }
 
@@ -178,18 +178,25 @@ export async function getUpcomingItems(
       }
     }
 
-    const formatted = formatItem(item, itemDateStr, todayStr, false, meetingLabel);
+    const formatted = formatItem(item, false, now, meetingLabel);
 
-    if (isPast) {
-      overdueList.push(formatted);
-    } else if (itemDateStr === todayStr) {
-      todayList.push(formatted);
-    } else if (itemDateStr === tomorrowStr) {
-      tomorrowList.push(formatted);
-    } else if (itemDateStr <= endOfWeekStr) {
-      thisWeekList.push(formatted);
-    } else {
-      laterList.push(formatted);
+    switch (info.section) {
+      case "overdue":
+        overdueList.push(formatted);
+        break;
+      case "today":
+        todayList.push(formatted);
+        break;
+      case "tomorrow":
+        tomorrowList.push(formatted);
+        break;
+      case "thisWeek":
+        thisWeekList.push(formatted);
+        break;
+      case "later":
+      default:
+        laterList.push(formatted);
+        break;
     }
   }
 
@@ -203,12 +210,23 @@ export async function getUpcomingItems(
       continue;
     }
 
+    const compDateInfo = getUpcomingDateInfo(
+      {
+        dueAt: comp.occurrenceDate,
+        hasTime: false,
+        doneAt: comp.completedAt,
+      },
+      now
+    );
+
     doneList.push({
-      ...formatItem(parent, comp.occurrenceDate, todayStr, true),
+      ...formatItem(parent, true, now),
       completionId: comp.id,
       dateStr: comp.occurrenceDate,
       dueAt: new Date(comp.completedAt).toISOString(),
       doneAt: new Date(comp.completedAt).toISOString(),
+      relativeLabel: "Completed",
+      detailDateDisplay: compDateInfo.detailDateDisplay,
     });
   }
 
@@ -231,33 +249,20 @@ export async function getUpcomingItems(
 
 function formatItem(
   item: UpcomingItem,
-  dateStr: string | null,
-  todayStr: string,
   isDone: boolean,
+  now: Date,
   nearestMeetingLabel?: string | null
 ): FormattedUpcomingItem {
-  let timeDisplay = "";
-  if (item.dueAt && item.hasTime) {
-    if (item.type === "meeting") {
-      timeDisplay = formatMeetingTimeRange(item.dueAt, item.endAt);
-    } else {
-      timeDisplay = formatDateTimeInTz(item.dueAt);
-    }
-  } else if (item.dueAt) {
-    timeDisplay = "All day";
-  } else {
-    timeDisplay = "";
-  }
-
-  const isOverdue = !isDone && dateStr !== null && dateStr < todayStr;
-  const isToday = dateStr === todayStr;
-
-  let relativeLabel = "No date";
-  if (isDone) {
-    relativeLabel = "Completed";
-  } else if (dateStr) {
-    relativeLabel = getRelativeDateLabel(dateStr, todayStr);
-  }
+  const info = getUpcomingDateInfo(
+    {
+      dueAt: item.dueAt,
+      endAt: item.endAt,
+      hasTime: item.hasTime,
+      snoozedUntil: item.snoozedUntil,
+      doneAt: isDone ? (item.doneAt || new Date()) : null,
+    },
+    now
+  );
 
   const normType = (item.type as string) === "work" ? "todo" : (item.type as UpcomingType);
 
@@ -274,17 +279,19 @@ function formatItem(
     doneAt: item.doneAt ? new Date(item.doneAt).toISOString() : null,
     snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil).toISOString() : null,
     createdAt: new Date(item.createdAt).toISOString(),
-    dateStr,
-    relativeLabel,
-    timeDisplay,
-    isOverdue,
-    isToday,
+    dateStr: info.dateStr,
+    relativeLabel: info.relativeLabel,
+    timeDisplay: info.timeDisplay,
+    detailDateDisplay: info.detailDateDisplay,
+    isOverdue: info.isOverdue,
+    isToday: info.isToday,
     isDone,
     nearestMeetingLabel,
   };
 }
 
 export async function createUpcomingItem(data: {
+  uuid?: string;
   title: string;
   type: UpcomingType;
   dueAt: string | null; // ISO string or null
@@ -296,10 +303,12 @@ export async function createUpcomingItem(data: {
   const auth = await isUserAuthenticated();
   if (!auth) throw new Error("Unauthorized");
 
+  const itemUuid = data.uuid || crypto.randomUUID();
+
   const [inserted] = await db
     .insert(upcomingItems)
     .values({
-      uuid: crypto.randomUUID(),
+      uuid: itemUuid,
       title: data.title.trim(),
       type: data.type,
       dueAt: data.dueAt ? new Date(data.dueAt) : null,
@@ -308,6 +317,19 @@ export async function createUpcomingItem(data: {
       repeat: data.dueAt ? data.repeat || null : null,
       notes: data.notes?.trim() || null,
       updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: upcomingItems.uuid,
+      set: {
+        title: data.title.trim(),
+        type: data.type,
+        dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        endAt: data.dueAt && data.endAt ? new Date(data.endAt) : null,
+        hasTime: data.dueAt ? data.hasTime : false,
+        repeat: data.dueAt ? data.repeat || null : null,
+        notes: data.notes?.trim() || null,
+        updatedAt: new Date(),
+      },
     })
     .returning();
 

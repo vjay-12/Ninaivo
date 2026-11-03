@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo } from "react";
+import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import {
   FormattedUpcomingItem,
   UpcomingGroupedData,
@@ -30,7 +30,14 @@ import {
   AlertCircle,
   Calendar,
 } from "lucide-react";
-import { getTodayDateString, addDaysToDate, formatTimeDisplay } from "@/lib/date";
+import {
+  getTodayDateString,
+  addDaysToDate,
+  formatTimeDisplay,
+  getUpcomingDateInfo,
+  buildIsoStringFromLocalDateAndTime,
+  getTimeStringInTz,
+} from "@/lib/date";
 import { localDb } from "@/lib/db-local";
 import { syncEngine } from "@/lib/sync";
 
@@ -82,6 +89,7 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
   const [repeat, setRepeat] = useState<UpcomingRepeat>(null);
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   // Optimistic pending state
   const [pendingToggles, setPendingToggles] = useState<Record<number, boolean>>({});
@@ -191,19 +199,13 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
     setHasTime(item.hasTime);
 
     if (item.dueAt) {
-      const d = new Date(item.dueAt);
-      setStartTime(
-        `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
-      );
+      setStartTime(getTimeStringInTz(item.dueAt));
     } else {
       setStartTime("09:00");
     }
 
     if (item.endAt) {
-      const e = new Date(item.endAt);
-      setEndTime(
-        `${String(e.getHours()).padStart(2, "0")}:${String(e.getMinutes()).padStart(2, "0")}`
-      );
+      setEndTime(getTimeStringInTz(item.endAt));
     } else {
       setEndTime("09:30");
     }
@@ -215,39 +217,33 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || isSaving) return;
+    if (isSavingRef.current || isSaving || !title.trim()) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
 
     if (hasTime && dateStr) {
       maybeRequestNotificationPermission();
     }
 
-    setIsSaving(true);
     try {
       let dueIso: string | null = null;
       let endIso: string | null = null;
 
       if (dateStr) {
-        const [y, m, d] = dateStr.split("-").map(Number);
-        const dueDate = new Date();
-        dueDate.setFullYear(y, m - 1, d);
-
-        if (hasTime) {
-          const [sh, sm] = startTime.split(":").map(Number);
-          dueDate.setHours(sh || 9, sm || 0, 0, 0);
-        } else {
-          dueDate.setHours(9, 0, 0, 0);
-        }
-        dueIso = dueDate.toISOString();
-
+        dueIso = buildIsoStringFromLocalDateAndTime(dateStr, hasTime ? startTime : "09:00");
         if (hasTime && type === "meeting") {
-          const endDate = new Date(dueDate);
-          const [eh, em] = endTime.split(":").map(Number);
-          endDate.setHours(eh || 9, em || 30, 0, 0);
-          endIso = endDate.toISOString();
+          endIso = buildIsoStringFromLocalDateAndTime(dateStr, endTime || "09:30");
         }
       }
 
       const nowIso = new Date().toISOString();
+      const dateInfo = getUpcomingDateInfo({
+        dueAt: dueIso,
+        endAt: endIso,
+        hasTime: dateStr ? hasTime : false,
+        doneAt: editingItem ? editingItem.doneAt : null,
+        snoozedUntil: editingItem ? editingItem.snoozedUntil : null,
+      });
 
       if (editingItem) {
         const updatedFormatted: FormattedUpcomingItem = {
@@ -259,23 +255,49 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
           hasTime: dateStr ? hasTime : false,
           repeat: dateStr ? repeat : null,
           notes,
-          dateStr: dateStr || null,
-          timeDisplay: dueIso && hasTime ? (type === "meeting" ? formatTimeDisplay(startTime) : formatTimeDisplay(startTime)) : (dueIso ? "All day" : ""),
+          dateStr: dateInfo.dateStr,
+          relativeLabel: dateInfo.relativeLabel,
+          timeDisplay: dateInfo.timeDisplay,
+          detailDateDisplay: dateInfo.detailDateDisplay,
+          isOverdue: dateInfo.isOverdue,
+          isToday: dateInfo.isToday,
         };
 
-        const updateSection = (list: FormattedUpcomingItem[]) =>
-          list.map((i) => (i.id === editingItem.id ? updatedFormatted : i));
+        const filterOut = (list: FormattedUpcomingItem[]) =>
+          list.filter((i) => i.id !== editingItem.id);
 
-        setData((prev) => ({
-          ...prev,
-          overdue: updateSection(prev.overdue),
-          today: updateSection(prev.today),
-          tomorrow: updateSection(prev.tomorrow),
-          thisWeek: updateSection(prev.thisWeek),
-          later: updateSection(prev.later),
-          noDate: updateSection(prev.noDate),
-          done: updateSection(prev.done),
-        }));
+        setData((prev) => {
+          const cleaned = {
+            ...prev,
+            overdue: filterOut(prev.overdue),
+            today: filterOut(prev.today),
+            tomorrow: filterOut(prev.tomorrow),
+            thisWeek: filterOut(prev.thisWeek),
+            later: filterOut(prev.later),
+            noDate: filterOut(prev.noDate),
+            done: filterOut(prev.done),
+          };
+
+          if (editingItem.isDone) {
+            return { ...cleaned, done: [updatedFormatted, ...cleaned.done] };
+          }
+
+          switch (dateInfo.section) {
+            case "overdue":
+              return { ...cleaned, overdue: [updatedFormatted, ...cleaned.overdue] };
+            case "today":
+              return { ...cleaned, today: [...cleaned.today, updatedFormatted] };
+            case "tomorrow":
+              return { ...cleaned, tomorrow: [...cleaned.tomorrow, updatedFormatted] };
+            case "thisWeek":
+              return { ...cleaned, thisWeek: [...cleaned.thisWeek, updatedFormatted] };
+            case "later":
+              return { ...cleaned, later: [...cleaned.later, updatedFormatted] };
+            case "noDate":
+            default:
+              return { ...cleaned, noDate: [updatedFormatted, ...cleaned.noDate] };
+          }
+        });
 
         if (editingItem.uuid && localDb) {
           try {
@@ -332,21 +354,34 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
           doneAt: null,
           snoozedUntil: null,
           createdAt: nowIso,
-          dateStr: dateStr || null,
-          relativeLabel: dateStr ? (dateStr === getTodayDateString() ? "Today" : dateStr) : "No date",
-          timeDisplay: dueIso && hasTime ? (type === "meeting" ? formatTimeDisplay(startTime) : formatTimeDisplay(startTime)) : (dueIso ? "All day" : ""),
-          isOverdue: false,
-          isToday: dateStr === getTodayDateString(),
+          dateStr: dateInfo.dateStr,
+          relativeLabel: dateInfo.relativeLabel,
+          timeDisplay: dateInfo.timeDisplay,
+          detailDateDisplay: dateInfo.detailDateDisplay,
+          isOverdue: dateInfo.isOverdue,
+          isToday: dateInfo.isToday,
           isDone: false,
         };
 
         setData((prev) => {
-          if (!dateStr) {
-            return { ...prev, noDate: [newFormatted, ...prev.noDate] };
-          } else if (dateStr === getTodayDateString()) {
-            return { ...prev, today: [...prev.today, newFormatted] };
-          } else {
-            return { ...prev, later: [...prev.later, newFormatted] };
+          switch (dateInfo.section) {
+            case "overdue":
+              return {
+                ...prev,
+                overdue: [newFormatted, ...prev.overdue],
+                totalOverdueCount: prev.totalOverdueCount + 1,
+              };
+            case "today":
+              return { ...prev, today: [...prev.today, newFormatted] };
+            case "tomorrow":
+              return { ...prev, tomorrow: [...prev.tomorrow, newFormatted] };
+            case "thisWeek":
+              return { ...prev, thisWeek: [...prev.thisWeek, newFormatted] };
+            case "later":
+              return { ...prev, later: [...prev.later, newFormatted] };
+            case "noDate":
+            default:
+              return { ...prev, noDate: [newFormatted, ...prev.noDate] };
           }
         });
 
@@ -390,6 +425,7 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
 
         try {
           await createUpcomingItem({
+            uuid: itemUuid,
             title,
             type,
             dueAt: dueIso,
@@ -403,6 +439,7 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
 
       setIsSheetOpen(false);
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -426,17 +463,51 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
           thisWeek: filterOut(prev.thisWeek),
           later: filterOut(prev.later),
           noDate: filterOut(prev.noDate),
-          done: [{ ...item, isDone: true, doneAt: nowIso }, ...prev.done],
+          done: [{ ...item, isDone: true, doneAt: nowIso, relativeLabel: "Completed" }, ...prev.done],
         };
       } else {
-        // Move back to today or later
-        return {
+        const dateInfo = getUpcomingDateInfo({
+          dueAt: item.dueAt,
+          endAt: item.endAt,
+          hasTime: item.hasTime,
+          snoozedUntil: null,
+          doneAt: null,
+        });
+
+        const restoredItem: FormattedUpcomingItem = {
+          ...item,
+          isDone: false,
+          doneAt: null,
+          isOverdue: dateInfo.isOverdue,
+          isToday: dateInfo.isToday,
+          relativeLabel: dateInfo.relativeLabel,
+          detailDateDisplay: dateInfo.detailDateDisplay,
+        };
+
+        const cleaned = {
           ...prev,
           done: filterOut(prev.done),
-          today: item.isToday ? [{ ...item, isDone: false, doneAt: null }, ...prev.today] : prev.today,
-          later: !item.isToday && item.dateStr ? [{ ...item, isDone: false, doneAt: null }, ...prev.later] : prev.later,
-          noDate: !item.dateStr ? [{ ...item, isDone: false, doneAt: null }, ...prev.noDate] : prev.noDate,
         };
+
+        switch (dateInfo.section) {
+          case "overdue":
+            return {
+              ...cleaned,
+              overdue: [restoredItem, ...cleaned.overdue],
+              totalOverdueCount: cleaned.totalOverdueCount + 1,
+            };
+          case "today":
+            return { ...cleaned, today: [...cleaned.today, restoredItem] };
+          case "tomorrow":
+            return { ...cleaned, tomorrow: [...cleaned.tomorrow, restoredItem] };
+          case "thisWeek":
+            return { ...cleaned, thisWeek: [...cleaned.thisWeek, restoredItem] };
+          case "later":
+            return { ...cleaned, later: [...cleaned.later, restoredItem] };
+          case "noDate":
+          default:
+            return { ...cleaned, noDate: [restoredItem, ...cleaned.noDate] };
+        }
       }
     });
 
@@ -1245,11 +1316,12 @@ function SectionBlock({
 
                   {/* Full Date & Time */}
                   <div className="text-xs text-[#8A92A3] flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5" />
+                    <Calendar className="w-3.5 h-3.5 shrink-0" />
                     <span>
-                      {item.dateStr
-                        ? `${item.dateStr} ${item.timeDisplay ? `at ${item.timeDisplay}` : "(All day)"}`
-                        : "No date set"}
+                      {item.detailDateDisplay ||
+                        (item.dateStr
+                          ? `${item.dateStr} ${item.timeDisplay ? `at ${item.timeDisplay}` : "(All day)"}`
+                          : "No date set")}
                     </span>
                   </div>
 

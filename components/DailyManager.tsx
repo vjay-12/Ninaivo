@@ -162,6 +162,7 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
 
         try {
           await createItem({
+            uuid: itemUuid,
             name,
             type,
             targetCount: finalTarget,
