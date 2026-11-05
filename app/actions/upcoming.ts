@@ -12,6 +12,7 @@ import {
   formatDateTimeInTz,
   formatMeetingTimeRange,
   getUpcomingDateInfo,
+  computeSnoozedDates,
 } from "@/lib/date";
 import { isUserAuthenticated } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
@@ -42,6 +43,7 @@ export interface FormattedUpcomingItem {
   isOverdue: boolean;
   isToday: boolean;
   isDone: boolean;
+  isSnoozed?: boolean;
   nearestMeetingLabel?: string | null; // e.g. "Next, in 45 min"
 
   // For repeating completions
@@ -140,11 +142,6 @@ export async function getUpcomingItems(
     }
 
     const info = getUpcomingDateInfo(item, now);
-
-    // If snoozed into the future, hide from active lists
-    if (info.isSnoozed) {
-      continue;
-    }
 
     // If completed non-repeating item
     if (item.doneAt) {
@@ -286,6 +283,7 @@ function formatItem(
     isOverdue: info.isOverdue,
     isToday: info.isToday,
     isDone,
+    isSnoozed: info.isSnoozed,
     nearestMeetingLabel,
   };
 }
@@ -465,32 +463,48 @@ export async function undoUpcomingCompletion(itemId: number, completionId?: numb
 
 export async function snoozeUpcomingItem(
   id: number,
-  duration: "1h" | "tomorrow" | "next_week"
+  duration: "1h" | "tomorrow"
 ) {
   const auth = await isUserAuthenticated();
   if (!auth) throw new Error("Unauthorized");
 
-  const now = new Date();
-  let snoozeTime = new Date();
+  const [item] = await db
+    .select()
+    .from(upcomingItems)
+    .where(and(eq(upcomingItems.id, id), isNull(upcomingItems.deletedAt)))
+    .limit(1);
 
-  if (duration === "1h") {
-    snoozeTime.setHours(snoozeTime.getHours() + 1);
-  } else if (duration === "tomorrow") {
-    snoozeTime.setDate(snoozeTime.getDate() + 1);
-    snoozeTime.setHours(9, 0, 0, 0);
-  } else if (duration === "next_week") {
-    snoozeTime.setDate(snoozeTime.getDate() + 7);
-    snoozeTime.setHours(9, 0, 0, 0);
-  }
+  if (!item) throw new Error("Item not found");
+
+  const now = new Date();
+  const { newDueAt, newEndAt, hasTime } = computeSnoozedDates(
+    item.dueAt,
+    item.endAt,
+    item.hasTime,
+    duration,
+    now
+  );
 
   await db
     .update(upcomingItems)
-    .set({ snoozedUntil: snoozeTime })
+    .set({
+      dueAt: newDueAt,
+      endAt: newEndAt,
+      hasTime,
+      snoozedUntil: now,
+      updatedAt: now,
+    })
     .where(eq(upcomingItems.id, id));
 
   revalidatePath("/upcoming");
   revalidatePath("/today");
-  return { success: true, snoozedUntil: snoozeTime.toISOString() };
+  return {
+    success: true,
+    dueAt: newDueAt.toISOString(),
+    endAt: newEndAt ? newEndAt.toISOString() : null,
+    hasTime,
+    snoozedUntil: now.toISOString(),
+  };
 }
 
 export async function deleteUpcomingItem(id: number) {

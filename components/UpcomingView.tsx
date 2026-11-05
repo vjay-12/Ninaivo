@@ -37,6 +37,7 @@ import {
   getUpcomingDateInfo,
   buildIsoStringFromLocalDateAndTime,
   getTimeStringInTz,
+  computeSnoozedDates,
 } from "@/lib/date";
 import { localDb } from "@/lib/db-local";
 import { syncEngine } from "@/lib/sync";
@@ -548,16 +549,104 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
     });
   };
 
-  const handleSnooze = async (id: number, duration: "1h" | "tomorrow" | "next_week") => {
+  const handleSnooze = async (
+    item: FormattedUpcomingItem,
+    duration: "1h" | "tomorrow",
+    e?: React.MouseEvent
+  ) => {
+    e?.stopPropagation();
     setExpandedId(null);
-    setData((prev) => ({
-      ...prev,
-      overdue: prev.overdue.filter((i) => i.id !== id),
-      today: prev.today.filter((i) => i.id !== id),
-    }));
+
+    const { newDueAt, newEndAt, hasTime } = computeSnoozedDates(
+      item.dueAt,
+      item.endAt,
+      item.hasTime,
+      duration
+    );
+
+    const nowIso = new Date().toISOString();
+    const newDueIso = newDueAt.toISOString();
+    const newEndIso = newEndAt ? newEndAt.toISOString() : null;
+
+    const dateInfo = getUpcomingDateInfo({
+      dueAt: newDueIso,
+      endAt: newEndIso,
+      hasTime,
+      snoozedUntil: nowIso,
+      doneAt: item.doneAt,
+    });
+
+    const updatedFormatted: FormattedUpcomingItem = {
+      ...item,
+      dueAt: newDueIso,
+      endAt: newEndIso,
+      hasTime,
+      snoozedUntil: nowIso,
+      isSnoozed: true,
+      dateStr: dateInfo.dateStr,
+      relativeLabel: dateInfo.relativeLabel,
+      timeDisplay: dateInfo.timeDisplay,
+      detailDateDisplay: dateInfo.detailDateDisplay,
+      isOverdue: dateInfo.isOverdue,
+      isToday: dateInfo.isToday,
+    };
+
+    // Optimistically move to its new section (never disappears!)
+    setData((prev) => {
+      const filterOut = (list: FormattedUpcomingItem[]) => list.filter((i) => i.id !== item.id);
+      const cleaned = {
+        ...prev,
+        overdue: filterOut(prev.overdue),
+        today: filterOut(prev.today),
+        tomorrow: filterOut(prev.tomorrow),
+        thisWeek: filterOut(prev.thisWeek),
+        later: filterOut(prev.later),
+        noDate: filterOut(prev.noDate),
+        done: filterOut(prev.done),
+      };
+
+      switch (dateInfo.section) {
+        case "overdue":
+          return { ...cleaned, overdue: [updatedFormatted, ...cleaned.overdue] };
+        case "today":
+          return { ...cleaned, today: [...cleaned.today, updatedFormatted] };
+        case "tomorrow":
+          return { ...cleaned, tomorrow: [...cleaned.tomorrow, updatedFormatted] };
+        case "thisWeek":
+          return { ...cleaned, thisWeek: [...cleaned.thisWeek, updatedFormatted] };
+        case "later":
+        default:
+          return { ...cleaned, later: [...cleaned.later, updatedFormatted] };
+      }
+    });
+
+    // Write to Dexie immediately
+    if (item.uuid && localDb) {
+      try {
+        await localDb.upcomingItems.update(item.uuid, {
+          dueAt: newDueIso,
+          endAt: newEndIso,
+          hasTime,
+          snoozedUntil: nowIso,
+          updatedAt: nowIso,
+        });
+      } catch {}
+    }
+
+    // Queue sync write
+    if (item.uuid && syncEngine) {
+      syncEngine.queueLocalWrite("upcoming_items", "update", {
+        uuid: item.uuid,
+        dueAt: newDueIso,
+        endAt: newEndIso,
+        hasTime,
+        snoozedUntil: nowIso,
+        updatedAt: nowIso,
+      });
+    }
 
     try {
-      await snoozeUpcomingItem(id, duration);
+      await snoozeUpcomingItem(item.id, duration);
     } catch {}
   };
 
@@ -1145,7 +1234,7 @@ interface SectionBlockProps {
   onToggleExpand: (id: number) => void;
   onToggle: (item: FormattedUpcomingItem) => void;
   onEdit: (item: FormattedUpcomingItem) => void;
-  onSnooze: (id: number, duration: "1h" | "tomorrow" | "next_week") => void;
+  onSnooze: (item: FormattedUpcomingItem, duration: "1h" | "tomorrow", e?: React.MouseEvent) => void;
   onDelete: (id: number) => void;
 }
 
@@ -1286,6 +1375,13 @@ function SectionBlock({
                         <span className="capitalize">{item.repeat}</span>
                       </span>
                     )}
+
+                    {/* Snoozed indicator */}
+                    {(item.isSnoozed || item.snoozedUntil) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-[#D1D5DB] font-medium border border-white/10">
+                        Snoozed
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -1330,7 +1426,10 @@ function SectionBlock({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => onEdit(item)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(item);
+                        }}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium transition-colors cursor-pointer"
                       >
                         <Edit2 className="w-3 h-3 text-[#4FA3FF]" />
@@ -1343,24 +1442,23 @@ function SectionBlock({
                           <span className="text-[#8A92A3] mr-0.5">Snooze:</span>
                           <button
                             type="button"
-                            onClick={() => onSnooze(item.id, "1h")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSnooze(item, "1h", e);
+                            }}
                             className="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-[#8A92A3] hover:text-white cursor-pointer"
                           >
                             1h
                           </button>
                           <button
                             type="button"
-                            onClick={() => onSnooze(item.id, "tomorrow")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSnooze(item, "tomorrow", e);
+                            }}
                             className="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-[#8A92A3] hover:text-white cursor-pointer"
                           >
                             Tomorrow
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onSnooze(item.id, "next_week")}
-                            className="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-[#8A92A3] hover:text-white cursor-pointer"
-                          >
-                            1w
                           </button>
                         </div>
                       )}
@@ -1369,7 +1467,10 @@ function SectionBlock({
                     {/* Quiet Red Delete */}
                     <button
                       type="button"
-                      onClick={() => onDelete(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(item.id);
+                      }}
                       className="flex items-center gap-1 text-xs text-[#E4101E] hover:text-[#ff3b49] px-2 py-1 rounded-lg hover:bg-[#E4101E]/10 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3 h-3" />

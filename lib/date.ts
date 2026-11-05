@@ -231,6 +231,67 @@ export interface UpcomingDateInfo {
 }
 
 /**
+ * Computes new due_at and end_at when an item is snoozed.
+ * Snooze moves the due date and time (+1 hour, or tomorrow at the same time, or 9:00 AM if no time).
+ * The item stays visible in its new section with a small "Snoozed" label.
+ */
+export function computeSnoozedDates(
+  currentDueAt: Date | string | null | undefined,
+  currentEndAt: Date | string | null | undefined,
+  hasTime: boolean = true,
+  duration: "1h" | "tomorrow",
+  referenceNow: Date | string = new Date(),
+  timeZone: string = DEFAULT_TZ
+): {
+  newDueAt: Date;
+  newEndAt: Date | null;
+  hasTime: boolean;
+} {
+  const now = typeof referenceNow === "string" ? new Date(referenceNow) : referenceNow;
+  const currentDue = currentDueAt ? (typeof currentDueAt === "string" ? new Date(currentDueAt) : currentDueAt) : now;
+  const currentEnd = currentEndAt ? (typeof currentEndAt === "string" ? new Date(currentEndAt) : currentEndAt) : null;
+  const durationMs = currentEnd && currentDue ? currentEnd.getTime() - currentDue.getTime() : 0;
+
+  if (duration === "1h") {
+    // If due in past or no time, advance from now + 1 hour; otherwise currentDue + 1 hour
+    const baseTime = currentDue.getTime() < now.getTime() || !hasTime ? now.getTime() : currentDue.getTime();
+    const newDueAt = new Date(baseTime + 60 * 60 * 1000);
+    const newEndAt = durationMs > 0 ? new Date(newDueAt.getTime() + durationMs) : null;
+    return {
+      newDueAt,
+      newEndAt,
+      hasTime: true,
+    };
+  }
+
+  // "tomorrow"
+  const todayStr = getDateStringInTz(now, timeZone);
+  const tomorrowStr = addDaysToDate(todayStr, 1);
+
+  let newDueAt: Date;
+  let newHasTime = hasTime;
+
+  if (hasTime && currentDueAt) {
+    const timeStr = getTimeStringInTz(currentDue, timeZone);
+    const isoStr = buildIsoStringFromLocalDateAndTime(tomorrowStr, timeStr, timeZone);
+    newDueAt = new Date(isoStr);
+  } else {
+    // 9:00 AM if item had no time
+    const isoStr = buildIsoStringFromLocalDateAndTime(tomorrowStr, "09:00", timeZone);
+    newDueAt = new Date(isoStr);
+    newHasTime = false;
+  }
+
+  const newEndAt = durationMs > 0 ? new Date(newDueAt.getTime() + durationMs) : null;
+
+  return {
+    newDueAt,
+    newEndAt,
+    hasTime: newHasTime,
+  };
+}
+
+/**
  * Unified function that converts due_at to a local date in Asia/Kolkata and computes:
  * - Local YYYY-MM-DD date string
  * - Section grouping (Overdue, Today, Tomorrow, This week, Later, No date, Done)
@@ -246,9 +307,8 @@ export function getUpcomingDateInfo(
   const now = typeof referenceNow === "string" ? new Date(referenceNow) : referenceNow;
   const isDone = !!item.doneAt;
 
-  // 1. Snooze check (snoozed items are paused, never overdue while snooze is active)
-  const isSnoozed =
-    !isDone && !!(item.snoozedUntil && new Date(item.snoozedUntil).getTime() > now.getTime());
+  // 1. Snooze flag (shows small "Snoozed" label; item is never hidden)
+  const isSnoozed = !isDone && !!item.snoozedUntil;
 
   // 2. Handle NO DATE
   if (!item.dueAt) {

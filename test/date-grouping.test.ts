@@ -127,26 +127,18 @@ describe("Upcoming Date Grouping and Display", () => {
     assert.equal(infoAfter2.isToday, true);
   });
 
-  it("Snoozed items: active snooze suppresses overdue status", () => {
-    // Due yesterday: 2026-11-01 10:00 AM IST
-    // Snoozed until tomorrow: 2026-11-03 09:00 AM IST
+  it("Snoozed items: snooze label is present and item is placed by its due date", () => {
+    // Item snoozed to tomorrow (2026-11-03)
     const snoozedItem = {
-      dueAt: "2026-11-01T04:30:00.000Z",
-      snoozedUntil: "2026-11-03T03:30:00.000Z",
+      dueAt: "2026-11-03T04:30:00.000Z", // Moved to tomorrow 10:00 AM
+      snoozedUntil: "2026-11-02T06:30:00.000Z", // Timestamp when snoozed
       hasTime: true,
     };
 
-    // When now is 2026-11-02 (snooze is active)
-    const infoActiveSnooze = getUpcomingDateInfo(snoozedItem, refNow);
-    assert.equal(infoActiveSnooze.isSnoozed, true);
-    assert.equal(infoActiveSnooze.isOverdue, false, "Active snoozed item must not be marked overdue");
-
-    // When snooze expires: 2026-11-03 10:00 AM IST (now is 04:30:00 UTC)
-    const afterSnoozeNow = new Date("2026-11-03T04:30:00.000Z");
-    const infoExpiredSnooze = getUpcomingDateInfo(snoozedItem, afterSnoozeNow);
-    assert.equal(infoExpiredSnooze.isSnoozed, false);
-    assert.equal(infoExpiredSnooze.isOverdue, true, "Expired snoozed item becomes overdue if past due date");
-    assert.equal(infoExpiredSnooze.section, "overdue");
+    const info = getUpcomingDateInfo(snoozedItem, refNow);
+    assert.equal(info.isSnoozed, true, "Item displays Snoozed label");
+    assert.equal(info.section, "tomorrow", "Item is visible in Tomorrow section");
+    assert.equal(info.isOverdue, false);
   });
 
   it("Never shows raw ISO date: uses human format in subtitle and details", () => {
