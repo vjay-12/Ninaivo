@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { syncEngine, type SyncStatus } from "@/lib/sync";
 import { getRecycleBinCount } from "@/app/actions/bin";
 import RecycleBinModal from "@/components/RecycleBinModal";
+import { checkStoragePersistence, requestStoragePersistence, saveLocalSnapshot } from "@/lib/storage";
 
 interface SettingsViewProps {
   initialSettings: Record<string, any>;
@@ -34,6 +35,18 @@ interface SettingsViewProps {
 
 export default function SettingsView({ initialSettings, initialBinCount = 0 }: SettingsViewProps) {
   const router = useRouter();
+
+  // Storage persistence state
+  const [isPersisted, setIsPersisted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkStoragePersistence().then((val) => setIsPersisted(val));
+  }, []);
+
+  const handleRequestPersist = async () => {
+    const res = await requestStoragePersistence();
+    setIsPersisted(res);
+  };
 
   // Recycle bin state
   const [binCount, setBinCount] = useState<number>(initialBinCount);
@@ -303,7 +316,7 @@ export default function SettingsView({ initialSettings, initialBinCount = 0 }: S
       }
 
       // Check version
-      if (typeof json.version === "number" && json.version > 1) {
+      if (typeof json.version === "number" && json.version > 2) {
         throw new Error(
           `This backup was created by a newer version of Ninaivo (v${json.version}). Please update the app to import it.`
         );
@@ -340,6 +353,11 @@ export default function SettingsView({ initialSettings, initialBinCount = 0 }: S
     setBackupMessage(null);
 
     try {
+      // Save snapshot of current local IndexedDB before destructive replace
+      if (importMode === "replace") {
+        await saveLocalSnapshot("Pre-restore snapshot (replace)");
+      }
+
       const result = await executeRestore(parsedBackupData, importMode);
       if (!result.success) {
         throw new Error(result.error || "Restore failed. No data was changed.");
@@ -624,6 +642,30 @@ export default function SettingsView({ initialSettings, initialBinCount = 0 }: S
             />
             <span>{syncStatus.state === "syncing" ? "Syncing..." : "Sync now"}</span>
           </button>
+        </div>
+
+        {/* Storage Persistence Status */}
+        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+          <div className="space-y-0.5">
+            <span className="text-[#8A92A3] block text-[11px] font-heading uppercase tracking-wider">
+              Offline storage
+            </span>
+            <span className="text-white font-medium text-xs">
+              {isPersisted
+                ? "Persistent (protected from eviction)"
+                : "Standard (browser-managed)"}
+            </span>
+          </div>
+
+          {!isPersisted && (
+            <button
+              type="button"
+              onClick={handleRequestPersist}
+              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium text-xs transition-colors cursor-pointer"
+            >
+              Protect storage
+            </button>
+          )}
         </div>
       </div>
 

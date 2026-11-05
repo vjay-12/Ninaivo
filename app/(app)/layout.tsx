@@ -1,5 +1,6 @@
 import { MobileTabBar, DesktopSidebar, MobileTopHeader } from "@/components/Navigation";
 import UndoSnackbar from "@/components/UndoSnackbar";
+import StorageInitializer from "@/components/StorageInitializer";
 
 export default function AppLayout({
   children,
@@ -8,6 +9,9 @@ export default function AppLayout({
 }) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
+      {/* Initialize persistent storage */}
+      <StorageInitializer />
+
       {/* Desktop Sidebar */}
       <DesktopSidebar />
 
