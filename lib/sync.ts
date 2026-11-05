@@ -259,6 +259,8 @@ class SyncEngine {
       dailyLogs: incomingLogs,
       upcomingItems: incomingUpcoming,
       upcomingCompletions: incomingCompletions,
+      foodItems: incomingFoodItems,
+      foodLogs: incomingFoodLogs,
       settings: incomingSettings,
     } = data;
 
@@ -270,6 +272,8 @@ class SyncEngine {
         localDb.dailyLogs,
         localDb.upcomingItems,
         localDb.upcomingCompletions,
+        localDb.foodItems,
+        localDb.foodLogs,
         localDb.settings,
         localDb.syncMeta,
       ],
@@ -310,6 +314,26 @@ class SyncEngine {
             const local = await localDb.upcomingCompletions.get(comp.uuid);
             if (!local || new Date(comp.updatedAt) >= new Date(local.updatedAt)) {
               await localDb.upcomingCompletions.put(comp);
+            }
+          }
+        }
+
+        // Food Items
+        if (Array.isArray(incomingFoodItems)) {
+          for (const food of incomingFoodItems) {
+            const local = await localDb.foodItems.get(food.uuid);
+            if (!local || new Date(food.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.foodItems.put(food);
+            }
+          }
+        }
+
+        // Food Logs
+        if (Array.isArray(incomingFoodLogs)) {
+          for (const flog of incomingFoodLogs) {
+            const local = await localDb.foodLogs.get(flog.uuid);
+            if (!local || new Date(flog.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.foodLogs.put(flog);
             }
           }
         }

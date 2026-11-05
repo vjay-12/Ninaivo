@@ -68,13 +68,34 @@ export const BackupUpcomingCompletionSchema = z.object({
   deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
 });
 
+export const BackupFoodItemSchema = z.object({
+  id: z.number().int().optional(),
+  name: z.string().min(1, "Food name cannot be empty"),
+  category: z.enum(["fruit", "protein", "grain", "snack", "drink", "other"]).default("other"),
+  note: z.string().nullable().optional(),
+  createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
+});
+
+export const BackupFoodLogSchema = z.object({
+  id: z.number().int().optional(),
+  foodId: z.number().int().optional(),
+  foodUuid: z.string().optional(),
+  logDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  count: z.number().int().min(1).default(1),
+  createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
+});
+
 export const BackupSettingsSchema = z.record(z.string(), z.any());
 
 export const BackupPayloadSchema = z.object({
   app: z.literal("ninaivo", {
     message: "Invalid backup file: app identifier must be 'ninaivo'",
   }),
-  version: z.number().int().max(1, {
+  version: z.number().int().max(2, {
     message: "This backup was created by a newer version of Ninaivo. Please update the app to import it.",
   }),
   exportedAt: z.string().refine((val) => !isNaN(new Date(val).getTime()), "Invalid exportedAt date format"),
@@ -85,6 +106,8 @@ export const BackupPayloadSchema = z.object({
       dailyLogs: z.number().int().nonnegative().optional(),
       upcoming: z.number().int().nonnegative().optional(),
       completions: z.number().int().nonnegative().optional(),
+      foodItems: z.number().int().nonnegative().optional(),
+      foodLogs: z.number().int().nonnegative().optional(),
       settings: z.number().int().nonnegative().optional(),
     })
     .optional(),
@@ -94,6 +117,8 @@ export const BackupPayloadSchema = z.object({
       dailyLogs: z.array(BackupDailyLogSchema).default([]),
       upcoming: z.array(BackupUpcomingItemSchema).default([]),
       completions: z.array(BackupUpcomingCompletionSchema).default([]),
+      foodItems: z.array(BackupFoodItemSchema).default([]),
+      foodLogs: z.array(BackupFoodLogSchema).default([]),
       settings: BackupSettingsSchema.default({}),
     })
     .passthrough(),
@@ -104,4 +129,6 @@ export type BackupItem = z.infer<typeof BackupItemSchema>;
 export type BackupDailyLog = z.infer<typeof BackupDailyLogSchema>;
 export type BackupUpcomingItem = z.infer<typeof BackupUpcomingItemSchema>;
 export type BackupUpcomingCompletion = z.infer<typeof BackupUpcomingCompletionSchema>;
+export type BackupFoodItem = z.infer<typeof BackupFoodItemSchema>;
+export type BackupFoodLog = z.infer<typeof BackupFoodLogSchema>;
 

@@ -160,12 +160,51 @@ export const settings = pgTable("settings", {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
+// Food list items (freeform foods/meals)
+export const foodItems = pgTable("food_items", {
+  id: serial("id").primaryKey(),
+  uuid: text("uuid").notNull().unique(),
+  name: text("name").notNull(),
+  category: text("category", {
+    enum: ["fruit", "protein", "grain", "snack", "drink", "other"],
+  })
+    .notNull()
+    .default("other"),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+// Food logs (logging what was eaten on a day)
+export const foodLogs = pgTable(
+  "food_logs",
+  {
+    id: serial("id").primaryKey(),
+    uuid: text("uuid").notNull().unique(),
+    foodId: integer("food_id").references(() => foodItems.id, { onDelete: "cascade" }),
+    foodUuid: text("food_uuid"),
+    logDate: date("log_date").notNull(),
+    count: integer("count").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    foodLogDateIdx: index("food_logs_log_date_idx").on(table.logDate),
+  })
+);
+
 export type Item = typeof items.$inferSelect;
 export type NewItem = typeof items.$inferInsert;
 export type DailyLog = typeof dailyLogs.$inferSelect;
 export type UpcomingItem = typeof upcomingItems.$inferSelect;
 export type NewUpcomingItem = typeof upcomingItems.$inferInsert;
 export type UpcomingCompletion = typeof upcomingCompletions.$inferSelect;
+export type FoodItem = typeof foodItems.$inferSelect;
+export type NewFoodItem = typeof foodItems.$inferInsert;
+export type FoodLog = typeof foodLogs.$inferSelect;
+export type NewFoodLog = typeof foodLogs.$inferInsert;
 export type WeeklyTask = typeof weeklyTasks.$inferSelect;
 export type WeeklyLog = typeof weeklyLogs.$inferSelect;
 export type FutureReminder = typeof futureReminders.$inferSelect;

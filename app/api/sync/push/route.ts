@@ -5,6 +5,8 @@ import {
   dailyLogs,
   upcomingItems,
   upcomingCompletions,
+  foodItems,
+  foodLogs,
   settings,
 } from "@/db/schema";
 import { isUserAuthenticated } from "@/lib/auth";
@@ -15,7 +17,7 @@ export const dynamic = "force-dynamic";
 interface OutboxPushItem {
   id: number;
   uuid: string;
-  table: "items" | "daily_logs" | "upcoming_items" | "upcoming_completions" | "settings";
+  table: "items" | "daily_logs" | "upcoming_items" | "upcoming_completions" | "food_items" | "food_logs" | "settings";
   action: "insert" | "update" | "delete";
   record: any;
   timestamp: number;
@@ -244,6 +246,82 @@ export async function POST(req: Request) {
                   },
                 });
             }
+          }
+        } else if (table === "food_items") {
+          const [existing] = await tx
+            .select()
+            .from(foodItems)
+            .where(eq(foodItems.uuid, uuid))
+            .limit(1);
+
+          if (isDelete) {
+            if (existing) {
+              await tx
+                .update(foodItems)
+                .set({ deletedAt: deletedAtVal, updatedAt: recordUpdatedAt })
+                .where(eq(foodItems.uuid, uuid));
+            }
+          } else {
+            await tx
+              .insert(foodItems)
+              .values({
+                uuid,
+                name: record.name || "Untitled",
+                category: record.category || "other",
+                note: record.note || null,
+                createdAt: record.createdAt ? new Date(record.createdAt) : now,
+                updatedAt: recordUpdatedAt,
+                deletedAt: null,
+              })
+              .onConflictDoUpdate({
+                target: foodItems.uuid,
+                set: {
+                  name: record.name,
+                  category: record.category,
+                  note: record.note,
+                  updatedAt: recordUpdatedAt,
+                  deletedAt: null,
+                },
+              });
+          }
+        } else if (table === "food_logs") {
+          let resolvedFoodId = record.foodId;
+          if (!resolvedFoodId && record.foodUuid) {
+            const [matched] = await tx
+              .select({ id: foodItems.id })
+              .from(foodItems)
+              .where(eq(foodItems.uuid, record.foodUuid))
+              .limit(1);
+            if (matched) resolvedFoodId = matched.id;
+          }
+
+          if (isDelete) {
+            await tx
+              .update(foodLogs)
+              .set({ deletedAt: deletedAtVal, updatedAt: recordUpdatedAt })
+              .where(eq(foodLogs.uuid, uuid));
+          } else {
+            await tx
+              .insert(foodLogs)
+              .values({
+                uuid,
+                foodId: resolvedFoodId || null,
+                foodUuid: record.foodUuid || null,
+                logDate: record.logDate,
+                count: Math.max(1, record.count || 1),
+                createdAt: record.createdAt ? new Date(record.createdAt) : now,
+                updatedAt: recordUpdatedAt,
+                deletedAt: null,
+              })
+              .onConflictDoUpdate({
+                target: foodLogs.uuid,
+                set: {
+                  foodId: resolvedFoodId || null,
+                  count: Math.max(1, record.count || 1),
+                  updatedAt: recordUpdatedAt,
+                  deletedAt: null,
+                },
+              });
           }
         } else if (table === "settings") {
           const key = record.key;

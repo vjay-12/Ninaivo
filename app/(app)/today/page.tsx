@@ -15,6 +15,7 @@ export default async function TodayPage() {
       dietItems={data.dietItems}
       weeklyToday={data.weeklyToday}
       reminders={data.reminders}
+      otherFoodsToday={data.otherFoodsToday}
     />
   );
 }

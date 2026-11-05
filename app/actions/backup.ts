@@ -1,7 +1,15 @@
 "use server";
 
 import { db } from "@/db";
-import { items, dailyLogs, upcomingItems, upcomingCompletions, settings } from "@/db/schema";
+import {
+  items,
+  dailyLogs,
+  upcomingItems,
+  upcomingCompletions,
+  foodItems,
+  foodLogs,
+  settings,
+} from "@/db/schema";
 import { isUserAuthenticated } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { BackupPayloadSchema, type BackupPayload } from "@/lib/backup-schema";
@@ -21,6 +29,8 @@ export interface BackupPreviewResult {
       dailyLogs: number;
       upcoming: number;
       completions: number;
+      foodItems?: number;
+      foodLogs?: number;
     };
     comparison: {
       items: { new: number; existing: number };
@@ -39,6 +49,8 @@ export interface RestoreResult {
     dailyLogs: number;
     upcoming: number;
     completions?: number;
+    foodItems?: number;
+    foodLogs?: number;
   };
 }
 
@@ -69,7 +81,14 @@ export async function previewBackup(rawJson: unknown): Promise<BackupPreviewResu
   }
 
   const payload: BackupPayload = parseResult.data;
-  const { items: bItems, dailyLogs: bLogs, upcoming: bUpcoming, completions: bCompletions } = payload.data;
+  const {
+    items: bItems,
+    dailyLogs: bLogs,
+    upcoming: bUpcoming,
+    completions: bCompletions,
+  } = payload.data;
+  const bFoodItems = payload.data.foodItems || [];
+  const bFoodLogs = payload.data.foodLogs || [];
 
   // 2. Referential integrity check
   const fileItemIds = new Set(
@@ -198,11 +217,15 @@ export async function restoreDatabaseData(
     completions: bCompletions,
     settings: bSettings,
   } = payload.data;
+  const bFoodItems = payload.data.foodItems || [];
+  const bFoodLogs = payload.data.foodLogs || [];
 
   try {
     await db.transaction(async (tx) => {
       // 1. If 'replace' mode, wipe existing user tables
       if (mode === "replace") {
+        await tx.delete(foodLogs);
+        await tx.delete(foodItems);
         await tx.delete(upcomingCompletions);
         await tx.delete(upcomingItems);
         await tx.delete(dailyLogs);
@@ -390,7 +413,59 @@ export async function restoreDatabaseData(
           .onConflictDoNothing();
       }
 
-      // 6. Restore Settings (excluding sensitive credentials/secrets)
+      // 6. Restore Food Items and Food Logs
+      const foodIdMap = new Map<number, number>();
+      for (const food of bFoodItems) {
+        const [inserted] = await tx
+          .insert(foodItems)
+          .values({
+            uuid: (food as any).uuid || crypto.randomUUID(),
+            name: food.name,
+            category: (food.category as any) || "other",
+            note: food.note || null,
+            deletedAt: food.deletedAt ? new Date(food.deletedAt) : null,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: foodItems.uuid,
+            set: {
+              name: food.name,
+              category: (food.category as any) || "other",
+              note: food.note || null,
+              deletedAt: food.deletedAt ? new Date(food.deletedAt) : null,
+              updatedAt: new Date(),
+            },
+          })
+          .returning({ id: foodItems.id });
+
+        if (food.id && inserted) foodIdMap.set(food.id, inserted.id);
+      }
+
+      for (const flog of bFoodLogs) {
+        const mappedFoodId = flog.foodId ? foodIdMap.get(flog.foodId) ?? flog.foodId : null;
+        await tx
+          .insert(foodLogs)
+          .values({
+            uuid: (flog as any).uuid || crypto.randomUUID(),
+            foodId: mappedFoodId,
+            foodUuid: (flog as any).foodUuid || null,
+            logDate: flog.logDate,
+            count: flog.count,
+            deletedAt: flog.deletedAt ? new Date(flog.deletedAt) : null,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: foodLogs.uuid,
+            set: {
+              foodId: mappedFoodId,
+              count: flog.count,
+              deletedAt: flog.deletedAt ? new Date(flog.deletedAt) : null,
+              updatedAt: new Date(),
+            },
+          });
+      }
+
+      // 7. Restore Settings (excluding sensitive credentials/secrets)
       if (bSettings && typeof bSettings === "object") {
         for (const [key, val] of Object.entries(bSettings)) {
           const keyLower = key.toLowerCase();
@@ -424,6 +499,7 @@ export async function restoreDatabaseData(
     try {
       revalidatePath("/today");
       revalidatePath("/daily");
+      revalidatePath("/diet");
       revalidatePath("/upcoming");
       revalidatePath("/report");
       revalidatePath("/settings");
@@ -438,6 +514,8 @@ export async function restoreDatabaseData(
         dailyLogs: bLogs.length,
         upcoming: bUpcoming.length,
         completions: bCompletions.length,
+        foodItems: bFoodItems.length,
+        foodLogs: bFoodLogs.length,
       },
     };
   } catch (err: any) {

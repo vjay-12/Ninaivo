@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { eq, asc, isNull } from "drizzle-orm";
+import { eq, asc, isNull, and } from "drizzle-orm";
 import { isUserAuthenticated } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
@@ -10,7 +10,7 @@ export async function getDailyItems() {
   return await db
     .select()
     .from(items)
-    .where(isNull(items.deletedAt))
+    .where(and(isNull(items.deletedAt), eq(items.type, "checklist")))
     .orderBy(asc(items.sortOrder), asc(items.id));
 }
 

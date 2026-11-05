@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { items, dailyLogs, Item, DailyLog } from "@/db/schema";
-import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
+import { items, dailyLogs, foodLogs, Item, DailyLog } from "@/db/schema";
+import { eq, and, gte, lte, desc, asc, isNull, sql } from "drizzle-orm";
 import { getTodayDateString, addDaysToDate, getWeekdayFromDate } from "@/lib/date";
 
 export type ReportRange = "week" | "month" | "all";
@@ -54,6 +54,8 @@ export interface ReportData {
     eggDaysDone: number;
     eggDaysTotal: number;
     eggRate: number;
+    dietAdherence: number;
+    totalFoodLogsCount: number;
   };
   bestWeekday: string;
   worstWeekday: string;
@@ -224,6 +226,32 @@ export async function computeReport(range: ReportRange = "month"): Promise<Repor
   });
 
   // 7. Diet Stats
+  const dietItems = allItems.filter((i) => i.type === "diet");
+  const totalDietExpected = dietItems.length * daysBack;
+  let totalDietDone = 0;
+  for (const di of dietItems) {
+    const stats = itemMap.get(di.id);
+    if (stats) totalDietDone += stats.doneDays;
+  }
+  const dietAdherence = totalDietExpected > 0 ? Math.round((totalDietDone / totalDietExpected) * 100) : 100;
+
+  let totalFoodLogsCount = 0;
+  try {
+    const [foodCountResult] = await db
+      .select({
+        count: sql<number>`COALESCE(SUM(${foodLogs.count}), 0)::int`,
+      })
+      .from(foodLogs)
+      .where(
+        and(
+          gte(foodLogs.logDate, startDate),
+          lte(foodLogs.logDate, today),
+          isNull(foodLogs.deletedAt)
+        )
+      );
+    totalFoodLogsCount = foodCountResult?.count || 0;
+  } catch {}
+
   const fruitsItem = allItems.find((i) => i.name.toLowerCase().includes("fruit"));
   const eggItem = allItems.find((i) => i.name.toLowerCase().includes("egg"));
 
@@ -302,6 +330,8 @@ export async function computeReport(range: ReportRange = "month"): Promise<Repor
       eggDaysDone,
       eggDaysTotal: daysBack,
       eggRate,
+      dietAdherence,
+      totalFoodLogsCount,
     },
     bestWeekday,
     worstWeekday,

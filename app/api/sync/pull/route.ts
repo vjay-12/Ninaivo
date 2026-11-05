@@ -5,6 +5,8 @@ import {
   dailyLogs,
   upcomingItems,
   upcomingCompletions,
+  foodItems,
+  foodLogs,
   settings,
 } from "@/db/schema";
 import { isUserAuthenticated } from "@/lib/auth";
@@ -35,6 +37,8 @@ export async function GET(req: Request) {
       fetchedLogs,
       fetchedUpcoming,
       fetchedCompletions,
+      fetchedFoodItems,
+      fetchedFoodLogs,
       fetchedSettings,
     ] = await Promise.all([
       sinceDate
@@ -64,6 +68,20 @@ export async function GET(req: Request) {
             .from(upcomingCompletions)
             .where(or(gt(upcomingCompletions.updatedAt, sinceDate), gt(upcomingCompletions.deletedAt, sinceDate)))
         : db.select().from(upcomingCompletions),
+
+      sinceDate
+        ? db
+            .select()
+            .from(foodItems)
+            .where(or(gt(foodItems.updatedAt, sinceDate), gt(foodItems.deletedAt, sinceDate)))
+        : db.select().from(foodItems),
+
+      sinceDate
+        ? db
+            .select()
+            .from(foodLogs)
+            .where(or(gt(foodLogs.updatedAt, sinceDate), gt(foodLogs.deletedAt, sinceDate)))
+        : db.select().from(foodLogs),
 
       sinceDate
         ? db
@@ -114,6 +132,18 @@ export async function GET(req: Request) {
         completedAt: comp.completedAt?.toISOString(),
         updatedAt: comp.updatedAt?.toISOString(),
         deletedAt: comp.deletedAt?.toISOString() || null,
+      })),
+      foodItems: fetchedFoodItems.map((f) => ({
+        ...f,
+        createdAt: f.createdAt?.toISOString(),
+        updatedAt: f.updatedAt?.toISOString(),
+        deletedAt: f.deletedAt?.toISOString() || null,
+      })),
+      foodLogs: fetchedFoodLogs.map((fl) => ({
+        ...fl,
+        createdAt: fl.createdAt?.toISOString(),
+        updatedAt: fl.updatedAt?.toISOString(),
+        deletedAt: fl.deletedAt?.toISOString() || null,
       })),
       settings: cleanSettings.map((s) => ({
         key: s.key,

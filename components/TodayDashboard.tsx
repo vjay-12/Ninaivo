@@ -17,6 +17,12 @@ interface TodayDashboardProps {
   dietItems: TodayItemData[];
   weeklyToday: TodayWeeklyTaskData[];
   reminders: TodayFutureReminderData[];
+  otherFoodsToday?: Array<{
+    id: number;
+    foodName: string;
+    category: string;
+    count: number;
+  }>;
 }
 
 export default function TodayDashboard({
@@ -25,6 +31,7 @@ export default function TodayDashboard({
   dietItems: initialDiet,
   weeklyToday: initialWeekly,
   reminders: initialReminders,
+  otherFoodsToday = [],
 }: TodayDashboardProps) {
   const [checklist, setChecklist] = useState(initialChecklist);
   const [diet, setDiet] = useState(initialDiet);
@@ -256,7 +263,7 @@ export default function TodayDashboard({
 
         {diet.length === 0 ? (
           <div className="p-6 rounded-xl bg-[#111216]/50 border border-white/5 text-center text-xs text-[#8A92A3]">
-            No diet items configured. Add one in the Daily tab.
+            No diet items configured. Add one in the Diet tab.
           </div>
         ) : (
           <div className="grid gap-2.5">
@@ -296,6 +303,40 @@ export default function TodayDashboard({
           </div>
         )}
       </section>
+
+      {/* Other foods logged today */}
+      {otherFoodsToday && otherFoodsToday.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between pb-1 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-4 bg-[#3D7EFF] rounded-sm -skew-x-12" />
+              <h2 className="font-heading font-bold text-lg tracking-wider text-white uppercase">
+                Other foods today
+              </h2>
+            </div>
+            <span className="text-xs text-[#8A92A3] font-heading font-semibold">
+              {otherFoodsToday.length} LOGGED
+            </span>
+          </div>
+
+          <div className="grid gap-2">
+            {otherFoodsToday.map((f) => (
+              <div
+                key={f.id}
+                className="p-3 rounded-xl bg-[#111216] border border-white/5 flex items-center justify-between text-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-medium">{f.foodName}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/5 text-[#8A92A3] border border-white/5 uppercase">
+                    {f.category}
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-[#4FA3FF]">× {f.count}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Reminders Due Today (Weekly Tasks & Future Reminders) */}
       {(weekly.length > 0 || futureReminders.length > 0) && (

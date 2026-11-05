@@ -7,6 +7,7 @@ import {
   ListTodo,
   CalendarClock,
   BarChart3,
+  Apple,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/today", label: "Today", icon: CalendarCheck2 },
   { href: "/daily", label: "Daily", icon: ListTodo },
   { href: "/upcoming", label: "Upcoming", icon: CalendarClock },
+  { href: "/diet", label: "Diet", icon: Apple },
   { href: "/report", label: "Report", icon: BarChart3 },
 ];
 
@@ -25,7 +27,7 @@ export function MobileTabBar() {
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#08080A]/95 backdrop-blur-md border-t border-white/10 pb-safe">
-      <div className="grid grid-cols-4 h-16 max-w-md mx-auto">
+      <div className="grid grid-cols-5 h-16 max-w-md mx-auto">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           const Icon = item.icon;

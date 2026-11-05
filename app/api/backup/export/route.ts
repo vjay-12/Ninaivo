@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { items, dailyLogs, upcomingItems, upcomingCompletions, settings } from "@/db/schema";
+import { items, dailyLogs, upcomingItems, upcomingCompletions, foodItems, foodLogs, settings } from "@/db/schema";
 import { isUserAuthenticated } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getBackupFilename, DEFAULT_TZ } from "@/lib/date";
@@ -29,12 +29,16 @@ export async function GET(req: Request) {
     allDailyLogs,
     allUpcoming,
     allCompletions,
+    allFoodItems,
+    allFoodLogs,
     allSettings,
   ] = await Promise.all([
     db.select().from(items).orderBy(asc(items.sortOrder), asc(items.id)),
     db.select().from(dailyLogs).orderBy(asc(dailyLogs.logDate)),
     db.select().from(upcomingItems).orderBy(asc(upcomingItems.dueAt)),
     db.select().from(upcomingCompletions).orderBy(asc(upcomingCompletions.occurrenceDate)),
+    db.select().from(foodItems).orderBy(asc(foodItems.name)),
+    db.select().from(foodLogs).orderBy(asc(foodLogs.logDate)),
     db.select().from(settings),
   ]);
 
@@ -75,7 +79,7 @@ export async function GET(req: Request) {
 
   const payload = {
     app: "ninaivo",
-    version: 1,
+    version: 2,
     exportedAt: now.toISOString(),
     timezone: tz,
     counts: {
@@ -83,6 +87,8 @@ export async function GET(req: Request) {
       dailyLogs: allDailyLogs.length,
       upcoming: allUpcoming.length,
       completions: allCompletions.length,
+      foodItems: allFoodItems.length,
+      foodLogs: allFoodLogs.length,
       settings: Object.keys(cleanSettings).length,
     },
     data: {
@@ -90,6 +96,8 @@ export async function GET(req: Request) {
       dailyLogs: allDailyLogs,
       upcoming: allUpcoming,
       completions: allCompletions,
+      foodItems: allFoodItems,
+      foodLogs: allFoodLogs,
       settings: cleanSettings,
     },
   };

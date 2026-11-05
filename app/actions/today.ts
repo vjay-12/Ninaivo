@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { items, dailyLogs, upcomingItems, upcomingCompletions } from "@/db/schema";
-import { eq, and, asc, isNull, or, lte, sql } from "drizzle-orm";
+import { items, dailyLogs, upcomingItems, upcomingCompletions, foodItems, foodLogs } from "@/db/schema";
+import { eq, and, asc, desc, isNull, or, lte, sql } from "drizzle-orm";
 import { getTodayDateString, getDateStringInTz } from "@/lib/date";
 import { calculateItemStreak } from "@/lib/streaks";
 import { isUserAuthenticated } from "@/lib/auth";
@@ -142,12 +142,33 @@ export async function getTodayData(targetDate?: string) {
     }
   }
 
+  // 5. Fetch other foods logged today from food_logs
+  const otherFoodsToday = await db
+    .select({
+      id: foodLogs.id,
+      foodId: foodLogs.foodId,
+      foodName: foodItems.name,
+      category: foodItems.category,
+      count: foodLogs.count,
+    })
+    .from(foodLogs)
+    .innerJoin(foodItems, eq(foodLogs.foodId, foodItems.id))
+    .where(
+      and(
+        eq(foodLogs.logDate, dateStr),
+        isNull(foodLogs.deletedAt),
+        isNull(foodItems.deletedAt)
+      )
+    )
+    .orderBy(desc(foodLogs.updatedAt));
+
   return {
     dateStr,
     checklistItems,
     dietItems,
     weeklyToday: [], // Weekly merged into Upcoming
     reminders,
+    otherFoodsToday,
   };
 }
 

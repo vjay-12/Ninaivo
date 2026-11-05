@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { items, upcomingItems, settings } from "@/db/schema";
+import { items, upcomingItems, foodItems, settings } from "@/db/schema";
 import { eq, isNotNull, desc, and, sql } from "drizzle-orm";
 import { isUserAuthenticated } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
@@ -56,6 +56,13 @@ export async function getRecycleBinItems(): Promise<RecycleBinItem[]> {
     .where(isNotNull(upcomingItems.deletedAt))
     .orderBy(desc(upcomingItems.deletedAt));
 
+  // 3. Fetch soft-deleted food items
+  const deletedFoods = await db
+    .select()
+    .from(foodItems)
+    .where(isNotNull(foodItems.deletedAt))
+    .orderBy(desc(foodItems.deletedAt));
+
   // Combine and format
   const list: RecycleBinItem[] = [];
 
@@ -97,6 +104,24 @@ export async function getRecycleBinItems(): Promise<RecycleBinItem[]> {
     });
   }
 
+  for (const food of deletedFoods) {
+    if (!food.deletedAt) continue;
+    const { daysAgo, relativeTime } = formatDaysAgo(new Date(food.deletedAt), now);
+    list.push({
+      id: food.id,
+      uuid: food.uuid,
+      sourceTable: "food_items",
+      typeLabel: `Food (${food.category})`,
+      name: food.name,
+      deletedAt: new Date(food.deletedAt).toISOString(),
+      daysAgo,
+      relativeTime,
+      metadata: {
+        category: food.category,
+      },
+    });
+  }
+
   // Sort by deletedAt descending (newest deletion first)
   list.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
 
@@ -117,7 +142,12 @@ export async function getRecycleBinCount(): Promise<number> {
     .from(upcomingItems)
     .where(isNotNull(upcomingItems.deletedAt));
 
-  return (itemsCount?.count || 0) + (upcomingCount?.count || 0);
+  const [foodCount] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(foodItems)
+    .where(isNotNull(foodItems.deletedAt));
+
+  return (itemsCount?.count || 0) + (upcomingCount?.count || 0) + (foodCount?.count || 0);
 }
 
 export async function restoreBinItem(
@@ -139,6 +169,11 @@ export async function restoreBinItem(
       .update(upcomingItems)
       .set({ deletedAt: null, updatedAt: now })
       .where(eq(upcomingItems.id, id));
+  } else if (sourceTable === "food_items") {
+    await db
+      .update(foodItems)
+      .set({ deletedAt: null, updatedAt: now })
+      .where(eq(foodItems.id, id));
   }
 
   revalidatePath("/upcoming");
@@ -167,6 +202,11 @@ export async function restoreAllBinItems() {
     .set({ deletedAt: null, updatedAt: now })
     .where(isNotNull(upcomingItems.deletedAt));
 
+  await db
+    .update(foodItems)
+    .set({ deletedAt: null, updatedAt: now })
+    .where(isNotNull(foodItems.deletedAt));
+
   revalidatePath("/upcoming");
   revalidatePath("/daily");
   revalidatePath("/diet");
@@ -188,6 +228,8 @@ export async function permanentDeleteBinItem(
     await db.delete(items).where(eq(items.id, id));
   } else if (sourceTable === "upcoming_items") {
     await db.delete(upcomingItems).where(eq(upcomingItems.id, id));
+  } else if (sourceTable === "food_items") {
+    await db.delete(foodItems).where(eq(foodItems.id, id));
   }
 
   revalidatePath("/settings");
@@ -200,6 +242,7 @@ export async function emptyBin() {
 
   await db.delete(items).where(isNotNull(items.deletedAt));
   await db.delete(upcomingItems).where(isNotNull(upcomingItems.deletedAt));
+  await db.delete(foodItems).where(isNotNull(foodItems.deletedAt));
 
   revalidatePath("/settings");
   return { success: true };

@@ -321,25 +321,25 @@ export default function ReportView({ initialData }: { initialData: ReportData })
             <div className="p-3.5 rounded-xl bg-[#1A1C22] border border-white/5">
               <div className="flex items-center gap-1.5 text-xs text-[#8A92A3] mb-1">
                 <Apple className="w-3.5 h-3.5 text-[#E4101E]" />
-                <span>Fruits / Day</span>
+                <span>Daily Targets</span>
               </div>
               <div className="font-heading font-bold text-2xl text-white">
-                {data.diet.fruitsAvg}
+                {data.diet.dietAdherence}%
                 <span className="text-xs text-[#8A92A3] font-normal ml-1">
-                  / {data.diet.fruitsTarget} target
+                  adherence
                 </span>
               </div>
             </div>
 
             <div className="p-3.5 rounded-xl bg-[#1A1C22] border border-white/5">
               <div className="flex items-center gap-1.5 text-xs text-[#8A92A3] mb-1">
-                <Egg className="w-3.5 h-3.5 text-[#4FA3FF]" />
-                <span>Eggs Done</span>
+                <Flame className="w-3.5 h-3.5 text-[#4FA3FF]" />
+                <span>Food List Logs</span>
               </div>
               <div className="font-heading font-bold text-2xl text-white">
-                {data.diet.eggDaysDone}
+                {data.diet.totalFoodLogsCount}
                 <span className="text-xs text-[#8A92A3] font-normal ml-1">
-                  / {data.diet.eggDaysTotal} days ({data.diet.eggRate}%)
+                  logged
                 </span>
               </div>
             </div>
