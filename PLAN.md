@@ -322,19 +322,28 @@ TZ_DEFAULT=Asia/Kolkata
 
 Set these in `.env.local` for development and in the Vercel project settings for production. Never commit them.
 
-## 10. Build Phases
+## 10. Build Phases & Status
 
-| Phase | Deliverable |
-|---|---|
-| **1. Setup** | Next.js + Tailwind, Neon project, Drizzle schema, migrations, seed |
-| **2. Auth + shell** | PIN login, middleware, theme tokens, tab bar, carbon + stripe styling |
-| **3. Today + Daily** | Core tick flow, counters, manage items, optimistic updates |
-| **4. Weekly + Future** | Week strip, recurring tasks, reminders groups |
-| **5. Report** | SQL aggregates, summary cards, charts, heatmap, insights |
-| **6. Polish** | Animations, PWA install, export/import, empty states, mobile QA |
-| **7. Deploy** | Connect repo to Vercel, add env vars, run migrations, test on phone |
+| Phase | Deliverable | Status |
+|---|---|---|
+| **Part A** | **Critical Bug Fix:** Resolve disappearing items on Snooze; move `due_at` forward (+1h or Tomorrow) and keep visible with "Snoozed" badge; restore erroneously hidden items | **Completed** |
+| **Part B** | **Recycle Bin & Safety:** Soft delete (`deleted_at`), Settings Recycle bin modal with count badge, Restore / Delete forever / Empty bin / Auto-clean, 5-second Undo snackbar | **Completed** |
+| **Part C** | **New Diet Tab:** 5-tab bottom bar (Today, Daily, Upcoming, Diet, Report); "Daily diet" & "Food list" views; `food_items` & `food_logs` tables; backup schema v2 | **Completed** |
+| **Part D** | **Offline-First & Data Safety:** Merge-only sync, persistent storage request (`navigator.storage.persist()`), storage status in Settings, local IndexedDB snapshots | **Completed** |
+| **Part E** | **Tests & Verification:** 27 unit tests + 12 Playwright E2E mobile tests across 360, 390, 430px viewports passing; manual checklist | **Completed** |
 
-## 11. Deployment Steps (Neon + Vercel)
+## 11. Database & Schema State (Singapore Region)
+
+Active Neon Database: `orange-shadow-20580025` in `aws-ap-southeast-1` (Singapore).
+- `items`: Daily checklist and daily diet targets with `type`, `target_count`, `active`, `deleted_at`.
+- `daily_logs`: Upserted log per item per date with `count`, `done`, `deleted_at`.
+- `upcoming_items`: Meetings, reminders, todos with `due_at`, `end_at`, `has_time`, `repeat`, `snoozed_until`, `deleted_at`.
+- `upcoming_completions`: Completion records for repeating upcoming items.
+- `food_items`: Freeform meals/foods with `category`, `note`, `deleted_at`.
+- `food_logs`: Daily food logs with `food_id`, `log_date`, `count`, `deleted_at`.
+- `settings`: Key-value settings with auto-clean bin configuration, last backup timestamps.
+
+## 12. Deployment Steps (Neon + Vercel)
 
 1. Create a Neon project and copy the **pooled** connection string.
 2. Push the code to GitHub.
