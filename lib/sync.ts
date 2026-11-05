@@ -277,13 +277,9 @@ class SyncEngine {
         // Items
         if (Array.isArray(incomingItems)) {
           for (const item of incomingItems) {
-            if (item.deletedAt) {
-              await localDb.items.delete(item.uuid);
-            } else {
-              const local = await localDb.items.get(item.uuid);
-              if (!local || new Date(item.updatedAt) >= new Date(local.updatedAt)) {
-                await localDb.items.put(item);
-              }
+            const local = await localDb.items.get(item.uuid);
+            if (!local || new Date(item.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.items.put(item);
             }
           }
         }
@@ -291,13 +287,9 @@ class SyncEngine {
         // Daily Logs
         if (Array.isArray(incomingLogs)) {
           for (const log of incomingLogs) {
-            if (log.deletedAt) {
-              await localDb.dailyLogs.delete(log.uuid);
-            } else {
-              const local = await localDb.dailyLogs.get(log.uuid);
-              if (!local || new Date(log.updatedAt) >= new Date(local.updatedAt)) {
-                await localDb.dailyLogs.put(log);
-              }
+            const local = await localDb.dailyLogs.get(log.uuid);
+            if (!local || new Date(log.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.dailyLogs.put(log);
             }
           }
         }
@@ -305,13 +297,9 @@ class SyncEngine {
         // Upcoming Items
         if (Array.isArray(incomingUpcoming)) {
           for (const up of incomingUpcoming) {
-            if (up.deletedAt) {
-              await localDb.upcomingItems.delete(up.uuid);
-            } else {
-              const local = await localDb.upcomingItems.get(up.uuid);
-              if (!local || new Date(up.updatedAt) >= new Date(local.updatedAt)) {
-                await localDb.upcomingItems.put(up);
-              }
+            const local = await localDb.upcomingItems.get(up.uuid);
+            if (!local || new Date(up.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.upcomingItems.put(up);
             }
           }
         }
@@ -319,13 +307,9 @@ class SyncEngine {
         // Upcoming Completions
         if (Array.isArray(incomingCompletions)) {
           for (const comp of incomingCompletions) {
-            if (comp.deletedAt) {
-              await localDb.upcomingCompletions.delete(comp.uuid);
-            } else {
-              const local = await localDb.upcomingCompletions.get(comp.uuid);
-              if (!local || new Date(comp.updatedAt) >= new Date(local.updatedAt)) {
-                await localDb.upcomingCompletions.put(comp);
-              }
+            const local = await localDb.upcomingCompletions.get(comp.uuid);
+            if (!local || new Date(comp.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.upcomingCompletions.put(comp);
             }
           }
         }
@@ -333,13 +317,9 @@ class SyncEngine {
         // Settings
         if (Array.isArray(incomingSettings)) {
           for (const s of incomingSettings) {
-            if (s.deletedAt) {
-              await localDb.settings.delete(s.key);
-            } else {
-              const local = await localDb.settings.get(s.key);
-              if (!local || new Date(s.updatedAt) >= new Date(local.updatedAt)) {
-                await localDb.settings.put(s);
-              }
+            const local = await localDb.settings.get(s.key);
+            if (!local || new Date(s.updatedAt) >= new Date(local.updatedAt)) {
+              await localDb.settings.put(s);
             }
           }
         }

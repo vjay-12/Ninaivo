@@ -1,4 +1,5 @@
 import { MobileTabBar, DesktopSidebar, MobileTopHeader } from "@/components/Navigation";
+import UndoSnackbar from "@/components/UndoSnackbar";
 
 export default function AppLayout({
   children,
@@ -19,6 +20,9 @@ export default function AppLayout({
         <main className="flex-1 w-full max-w-4xl mx-auto p-4 sm:p-6 md:p-8 pb-28 md:pb-8">
           {children}
         </main>
+
+        {/* Global Undo Snackbar */}
+        <UndoSnackbar />
 
         {/* Mobile Bottom Tab Bar */}
         <MobileTabBar />

@@ -231,6 +231,7 @@ export async function restoreDatabaseData(
                 reminderTime: item.reminderTime || null,
                 sortOrder: item.sortOrder ?? existing.sortOrder,
                 active: item.active !== false,
+                deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
               })
               .where(sql`${items.id} = ${existing.id}`);
 
@@ -247,6 +248,7 @@ export async function restoreDatabaseData(
                 reminderTime: item.reminderTime || null,
                 sortOrder: item.sortOrder || 0,
                 active: item.active !== false,
+                deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
                 updatedAt: new Date(),
               })
               .returning({ id: items.id });
@@ -268,6 +270,7 @@ export async function restoreDatabaseData(
               reminderTime: item.reminderTime || null,
               sortOrder: item.sortOrder || 0,
               active: item.active !== false,
+              deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
               updatedAt: new Date(),
             })
             .returning({ id: items.id });
@@ -288,6 +291,7 @@ export async function restoreDatabaseData(
             logDate: log.logDate,
             count: log.count,
             done: log.done,
+            deletedAt: log.deletedAt ? new Date(log.deletedAt) : null,
             updatedAt: new Date(),
           })
           .onConflictDoUpdate({
@@ -298,6 +302,7 @@ export async function restoreDatabaseData(
                   ? log.count
                   : sql`GREATEST(${dailyLogs.count}, ${log.count})`,
               done: mode === "replace" ? log.done : sql`${dailyLogs.done} OR ${log.done}`,
+              deletedAt: log.deletedAt ? new Date(log.deletedAt) : null,
               updatedAt: new Date(),
             },
           });
@@ -335,6 +340,7 @@ export async function restoreDatabaseData(
                 notes: item.notes || null,
                 doneAt: item.doneAt ? new Date(item.doneAt) : null,
                 snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil) : null,
+                deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
                 updatedAt: new Date(),
               })
               .returning({ id: upcomingItems.id });
@@ -359,6 +365,7 @@ export async function restoreDatabaseData(
               notes: item.notes || null,
               doneAt: item.doneAt ? new Date(item.doneAt) : null,
               snoozedUntil: item.snoozedUntil ? new Date(item.snoozedUntil) : null,
+              deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
               updatedAt: new Date(),
             })
             .returning({ id: upcomingItems.id });

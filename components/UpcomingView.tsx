@@ -14,6 +14,8 @@ import {
   snoozeUpcomingItem,
   deleteUpcomingItem,
 } from "@/app/actions/upcoming";
+import { restoreBinItem } from "@/app/actions/bin";
+import { triggerUndoSnackbar } from "@/components/UndoSnackbar";
 import {
   Plus,
   Check,
@@ -651,19 +653,29 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Delete this item? Its history will also be removed.")) return;
     setExpandedId(null);
 
-    let targetUuid: string | undefined;
-    for (const sec of [data.overdue, data.today, data.tomorrow, data.thisWeek, data.later, data.noDate, data.done]) {
-      const found = sec.find((i) => i.id === id);
+    let targetItem: FormattedUpcomingItem | undefined;
+    let targetSection: keyof typeof data = "noDate";
+
+    const sections: (keyof typeof data)[] = ["overdue", "today", "tomorrow", "thisWeek", "later", "noDate", "done"];
+    for (const secKey of sections) {
+      const list = data[secKey] as FormattedUpcomingItem[];
+      const found = list.find((i) => i.id === id);
       if (found) {
-        targetUuid = found.uuid;
+        targetItem = found;
+        targetSection = secKey;
         break;
       }
     }
 
+    if (!targetItem) return;
+
+    const itemToDelete = targetItem;
+    const fromSection = targetSection;
     const nowIso = new Date().toISOString();
+
+    // Optimistically remove from list
     setData((prev) => ({
       ...prev,
       overdue: prev.overdue.filter((i) => i.id !== id),
@@ -675,15 +687,19 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
       done: prev.done.filter((i) => i.id !== id),
     }));
 
-    if (targetUuid) {
+    // Soft-delete in local IndexedDB (never hard-delete on user delete)
+    if (itemToDelete.uuid) {
       if (localDb) {
         try {
-          await localDb.upcomingItems.delete(targetUuid);
+          await localDb.upcomingItems.update(itemToDelete.uuid, {
+            deletedAt: nowIso,
+            updatedAt: nowIso,
+          });
         } catch {}
       }
       if (syncEngine) {
-        syncEngine.queueLocalWrite("upcoming_items", "delete", {
-          uuid: targetUuid,
+        syncEngine.queueLocalWrite("upcoming_items", "update", {
+          uuid: itemToDelete.uuid,
           deletedAt: nowIso,
           updatedAt: nowIso,
         });
@@ -693,6 +709,44 @@ export default function UpcomingView({ initialData }: UpcomingViewProps) {
     try {
       await deleteUpcomingItem(id);
     } catch {}
+
+    // Show 5-second undo snackbar
+    triggerUndoSnackbar({
+      message: `Deleted "${itemToDelete.title}".`,
+      onUndo: async () => {
+        // Restore to view
+        setData((prev) => {
+          const list = prev[fromSection] as FormattedUpcomingItem[];
+          return {
+            ...prev,
+            [fromSection]: [itemToDelete, ...list],
+          };
+        });
+
+        // Restore in local IndexedDB
+        if (itemToDelete.uuid) {
+          if (localDb) {
+            try {
+              await localDb.upcomingItems.update(itemToDelete.uuid, {
+                deletedAt: null,
+                updatedAt: new Date().toISOString(),
+              });
+            } catch {}
+          }
+          if (syncEngine) {
+            syncEngine.queueLocalWrite("upcoming_items", "update", {
+              uuid: itemToDelete.uuid,
+              deletedAt: null,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+
+        try {
+          await restoreBinItem("upcoming_items", itemToDelete.id);
+        } catch {}
+      },
+    });
   };
 
   const filterByType = (items: FormattedUpcomingItem[]) => {

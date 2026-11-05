@@ -20,16 +20,31 @@ import {
   RefreshCw,
   Cloud,
   CloudOff,
+  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { syncEngine, type SyncStatus } from "@/lib/sync";
+import { getRecycleBinCount } from "@/app/actions/bin";
+import RecycleBinModal from "@/components/RecycleBinModal";
 
 interface SettingsViewProps {
   initialSettings: Record<string, any>;
+  initialBinCount?: number;
 }
 
-export default function SettingsView({ initialSettings }: SettingsViewProps) {
+export default function SettingsView({ initialSettings, initialBinCount = 0 }: SettingsViewProps) {
   const router = useRouter();
+
+  // Recycle bin state
+  const [binCount, setBinCount] = useState<number>(initialBinCount);
+  const [isBinModalOpen, setIsBinModalOpen] = useState(false);
+
+  const refreshBinCount = async () => {
+    try {
+      const count = await getRecycleBinCount();
+      setBinCount(count);
+    } catch {}
+  };
 
   // Change PIN state
   const [currentPin, setCurrentPin] = useState("");
@@ -612,6 +627,39 @@ export default function SettingsView({ initialSettings }: SettingsViewProps) {
         </div>
       </div>
 
+      {/* 4. Recycle bin */}
+      <div className="p-5 sm:p-6 rounded-2xl bg-[#111216] border border-white/10 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trash2 className="w-5 h-5 text-[#E4101E]" />
+            <h2 className="font-heading font-bold text-lg uppercase tracking-wider text-white">
+              Recycle bin
+            </h2>
+          </div>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-white/10 text-white/80 border border-white/5">
+            {binCount}
+          </span>
+        </div>
+
+        <p className="text-xs text-[#8A92A3]">
+          Deleted items are safely stored here. They stay indefinitely unless emptied or auto-cleaned.
+        </p>
+
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              refreshBinCount();
+              setIsBinModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1A1C22] hover:bg-white/10 border border-white/10 text-white font-heading font-bold text-xs uppercase tracking-wider transition-colors min-h-[40px] cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-[#E4101E]" />
+            <span>Open recycle bin</span>
+          </button>
+        </div>
+      </div>
+
       {/* 4. Session / Sign out */}
       <div className="pt-2">
         <form action={logoutAction}>
@@ -908,6 +956,13 @@ export default function SettingsView({ initialSettings }: SettingsViewProps) {
           </div>
         </div>
       )}
+
+      {/* Recycle Bin Modal */}
+      <RecycleBinModal
+        isOpen={isBinModalOpen}
+        onClose={() => setIsBinModalOpen(false)}
+        onItemRestored={refreshBinCount}
+      />
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Item } from "@/db/schema";
 import { createItem, updateItem, deleteItem, reorderItems } from "@/app/actions/daily";
+import { restoreBinItem } from "@/app/actions/bin";
+import { triggerUndoSnackbar } from "@/components/UndoSnackbar";
 import {
   Plus,
   Edit2,
@@ -177,20 +179,25 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Delete this item? Its history will also be removed")) return;
     const targetItem = itemsList.find((i) => i.id === id);
+    if (!targetItem) return;
+
+    const originalIndex = itemsList.findIndex((i) => i.id === id);
     setItemsList((prev) => prev.filter((i) => i.id !== id));
     if (expandedId === id) setExpandedId(null);
 
     const nowIso = new Date().toISOString();
-    if (targetItem?.uuid) {
+    if (targetItem.uuid) {
       if (localDb) {
         try {
-          await localDb.items.delete(targetItem.uuid);
+          await localDb.items.update(targetItem.uuid, {
+            deletedAt: nowIso,
+            updatedAt: nowIso,
+          });
         } catch {}
       }
       if (syncEngine) {
-        syncEngine.queueLocalWrite("items", "delete", {
+        syncEngine.queueLocalWrite("items", "update", {
           uuid: targetItem.uuid,
           deletedAt: nowIso,
           updatedAt: nowIso,
@@ -201,6 +208,40 @@ export default function DailyManager({ initialItems }: { initialItems: Item[] })
     try {
       await deleteItem(id);
     } catch {}
+
+    triggerUndoSnackbar({
+      message: `Deleted "${targetItem.name}".`,
+      onUndo: async () => {
+        // Restore to items list at original index or at end
+        setItemsList((prev) => {
+          const next = [...prev];
+          next.splice(originalIndex, 0, targetItem);
+          return next;
+        });
+
+        if (targetItem.uuid) {
+          if (localDb) {
+            try {
+              await localDb.items.update(targetItem.uuid, {
+                deletedAt: null,
+                updatedAt: new Date().toISOString(),
+              });
+            } catch {}
+          }
+          if (syncEngine) {
+            syncEngine.queueLocalWrite("items", "update", {
+              uuid: targetItem.uuid,
+              deletedAt: null,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+
+        try {
+          await restoreBinItem("items", targetItem.id);
+        } catch {}
+      },
+    });
   };
 
   const handleToggleActive = async (item: Item) => {

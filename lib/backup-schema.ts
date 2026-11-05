@@ -9,6 +9,8 @@ export const BackupItemSchema = z.object({
   sortOrder: z.number().int().default(0),
   active: z.boolean().default(true),
   createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
 });
 
 export const BackupDailyLogSchema = z.object({
@@ -18,6 +20,7 @@ export const BackupDailyLogSchema = z.object({
   count: z.number().int().min(0).default(0),
   done: z.boolean().default(false),
   updatedAt: z.union([z.string(), z.date()]).optional(),
+  deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
 });
 
 export const BackupUpcomingItemSchema = z.object({
@@ -50,6 +53,8 @@ export const BackupUpcomingItemSchema = z.object({
     .optional()
     .refine((val) => !val || !isNaN(new Date(val).getTime()), "Invalid snoozedUntil timestamp"),
   createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
 });
 
 export const BackupUpcomingCompletionSchema = z.object({
@@ -59,6 +64,8 @@ export const BackupUpcomingCompletionSchema = z.object({
   completedAt: z
     .union([z.string(), z.date()])
     .refine((val) => !isNaN(new Date(val).getTime()), "Invalid completedAt timestamp"),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  deletedAt: z.union([z.string(), z.date()]).nullable().optional(),
 });
 
 export const BackupSettingsSchema = z.record(z.string(), z.any());
